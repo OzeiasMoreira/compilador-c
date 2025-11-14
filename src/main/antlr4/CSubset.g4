@@ -6,7 +6,17 @@ package br.uenp.compiladores;
 
 program: functionDeclaration+;
 
-functionDeclaration: type ID LPAREN RPAREN LBRACE statement* RBRACE;
+functionDeclaration:
+    type ID LPAREN paramList? RPAREN block
+    ;
+
+paramList:
+    param (COMMA param)*
+    ;
+
+param:
+    type ID
+    ;
 
 statement:
     declaration
@@ -19,6 +29,11 @@ statement:
     | scanfStatement
     | doWhileStatement
     | switchStatement
+    | returnStatement
+    ;
+
+returnStatement:
+    RETURN expression? SEMI
     ;
 
 ifStatement:
@@ -26,7 +41,7 @@ ifStatement:
     ;
 
 printfStatement:
-    PRINTF LPAREN STRING_LITERAL (COMMA expression)? RPAREN SEMI
+    PRINTF LPAREN STRING_LITERAL (COMMA argList)? RPAREN SEMI
     ;
 
 scanfStatement:
@@ -66,43 +81,42 @@ forInit:
     ;
 
 block: LBRACE statement* RBRACE;
-
 declaration: simpleDeclaration SEMI;
-simpleDeclaration: type ID;
-
+simpleDeclaration: type ID (ASSIGN expression)?
+    ;
 assignment: simpleAssignment SEMI;
 simpleAssignment: ID ASSIGN expression;
-
-// --- CADEIA DE EXPRESSÃO ATUALIZADA ---
-expression: logicalOrExpr; // <-- MUDANÇA 1
-
-logicalOrExpr: // <-- NOVA REGRA
+expression: logicalOrExpr;
+logicalOrExpr:
     logicalAndExpr (OR logicalAndExpr)*
     ;
-
-logicalAndExpr: // <-- NOVA REGRA
+logicalAndExpr:
     relExpr (AND relExpr)*
     ;
-// --- FIM DA ATUALIZAÇÃO ---
-
 relExpr:
     addExpr ( (GT | LT | EQ | NEQ) addExpr )*
     ;
-
 addExpr:
     multExpr ( (PLUS | MINUS) multExpr )*
     ;
-
 multExpr:
     primaryExpr ( (MULT | DIV) primaryExpr )*
     ;
-
 primaryExpr:
       INT
     | FLOAT
     | CHAR_LITERAL
     | ID
+    | functionCall
     | LPAREN expression RPAREN
+    ;
+
+functionCall:
+    ID LPAREN argList? RPAREN
+    ;
+
+argList:
+    expression (COMMA expression)*
     ;
 
 type: T_INT | T_FLOAT | T_CHAR;
@@ -114,7 +128,7 @@ ASSIGN: '=';
 LPAREN: '(';
 RPAREN: ')';
 LBRACE: '{';
-RBRACE: '}';
+RBRACE: '}'; // <-- ESTA É A LINHA CORRIGIDA
 SEMI: ';';
 
 // Tokens Aritméticos
@@ -123,7 +137,7 @@ MINUS: '-';
 MULT: '*';
 DIV: '/';
 
-// Tokens de Controle e Relacionais
+// Tokens de Controlo e Relacionais
 IF: 'if';
 ELSE: 'else';
 WHILE: 'while';
@@ -133,12 +147,13 @@ SWITCH: 'switch';
 CASE: 'case';
 DEFAULT: 'default';
 BREAK: 'break';
+RETURN: 'return';
 EQ: '==';
 NEQ: '!=';
 GT: '>';
 LT: '<';
-AND: '&&'; // <-- ADICIONADO
-OR: '||';  // <-- ADICIONADO
+AND: '&&';
+OR: '||';
 
 // Tokens do Printf e Scanf
 PRINTF: 'printf';
