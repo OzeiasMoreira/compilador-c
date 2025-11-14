@@ -1,16 +1,20 @@
+// Em teste.c
 int main() {
-    int x;
-    float y;
+    int dia;
+    printf("Digite um numero de 1 a 3: ");
+    scanf("%d", &dia);
 
-    x = 10;
-    y = 5.5;
-
-    float z;
-    z = x + y; // Teste de promoção (10 + 5.5 = 15.5)
-
-    if (z > 15.0) {
-        printf("z vale: %f\n", z); // Deve imprimir 15.5
-    } else {
-        printf("z eh menor ou igual a 15.0\n");
+    switch (dia) {
+        case 1:
+            printf("Voce escolheu 1\n");
+            break;
+        case 2:
+            printf("Voce escolheu 2 (caindo...) \n");
+            // Teste de fallthrough
+        case 3:
+            printf("Voce escolheu 2 ou 3\n");
+            break;
+        default:
+            printf("Valor padrao\n");
     }
 }

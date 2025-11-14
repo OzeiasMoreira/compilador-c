@@ -16,6 +16,9 @@ statement:
     | printfStatement
     | whileStatement
     | forStatement
+    | scanfStatement
+    | doWhileStatement
+    | switchStatement // <-- ADICIONADO
     ;
 
 ifStatement:
@@ -26,8 +29,31 @@ printfStatement:
     PRINTF LPAREN STRING_LITERAL (COMMA expression)? RPAREN SEMI
     ;
 
+scanfStatement:
+    SCANF LPAREN STRING_LITERAL COMMA AMPERSAND ID RPAREN SEMI
+    ;
+
 whileStatement:
     WHILE LPAREN expression RPAREN block
+    ;
+
+doWhileStatement:
+    DO block WHILE LPAREN expression RPAREN SEMI
+    ;
+
+// Nova regra para o switch
+switchStatement:
+    SWITCH LPAREN expression RPAREN LBRACE caseBlock* defaultBlock? RBRACE
+    ;
+
+// Bloco 'case', simplificado para INT
+caseBlock:
+    CASE INT COLON statement* (BREAK SEMI)?
+    ;
+
+// Bloco 'default'
+defaultBlock:
+    DEFAULT COLON statement* (BREAK SEMI)?
     ;
 
 forStatement:
@@ -66,15 +92,17 @@ multExpr:
 
 primaryExpr:
       INT
-    | FLOAT       // <-- ADICIONADO
+    | FLOAT
+    | CHAR_LITERAL
     | ID
     | LPAREN expression RPAREN
     ;
 
-type: T_INT | T_FLOAT; // <-- ATUALIZADO
+type: T_INT | T_FLOAT | T_CHAR;
 
 T_INT: 'int';
-T_FLOAT: 'float'; // <-- ADICIONADO
+T_FLOAT: 'float';
+T_CHAR: 'char';
 ASSIGN: '=';
 LPAREN: '(';
 RPAREN: ')';
@@ -88,23 +116,32 @@ MINUS: '-';
 MULT: '*';
 DIV: '/';
 
-// Tokens de Controle e Relacionais
+// Tokens de Controlo e Relacionais
 IF: 'if';
 ELSE: 'else';
 WHILE: 'while';
 FOR: 'for';
+DO: 'do';
+SWITCH: 'switch'; // <-- ADICIONADO
+CASE: 'case';     // <-- ADICIONADO
+DEFAULT: 'default'; // <-- ADICIONADO
+BREAK: 'break';   // <-- ADICIONADO
 EQ: '==';
 NEQ: '!=';
 GT: '>';
 LT: '<';
 
-// Tokens do Printf
+// Tokens do Printf e Scanf
 PRINTF: 'printf';
+SCANF: 'scanf';
 COMMA: ',';
+AMPERSAND: '&';
+COLON: ':';     // <-- ADICIONADO
 
 ID: [a-zA-Z_] [a-zA-Z_0-9]*;
 INT: [0-9]+;
-FLOAT: [0-9]+ '.' [0-9]+; // <-- ADICIONADO
+FLOAT: [0-9]+ '.' [0-9]+;
+CHAR_LITERAL: '\'' . '\'';
 STRING_LITERAL: '"' ( '\\' . | ~('\\'|'"') )* '"';
 
 WS: [ \t\r\n]+ -> skip;
