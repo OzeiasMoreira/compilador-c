@@ -9,7 +9,7 @@ import java.io.IOException;
 public class Main {
     public static void main(String[] args) {
         if (args.length == 0) {
-            System.err.println("Usage: java -jar compilador.jar <source_file.c>");
+            System.err.println("Uso: java -jar compilador.jar <arquivo_fonte.c>");
             System.exit(1);
         }
 
@@ -21,18 +21,18 @@ public class Main {
 
             ParseTree tree = parser.program();
 
-            System.out.println("Parsing finished successfully.");
+            System.out.println("Análise sintática concluída com sucesso.");
 
             // Visitor ativado para iniciar a interpretação
             MyVisitor visitor = new MyVisitor();
             visitor.visit(tree);
 
         } catch (IOException e) {
-            System.err.println("Error reading file: " + e.getMessage());
+            System.err.println("Erro ao ler o arquivo: " + e.getMessage());
             System.exit(1);
         } catch (Exception e) {
-            // Erros de sintaxe ou outros erros do ANTLR
-            System.err.println("Error during parsing: " + e.getMessage());
+            // Erros de sintaxe ou outros erros
+            System.err.println("Erro durante a análise: " + e.getMessage());
             System.exit(1);
         }
     }

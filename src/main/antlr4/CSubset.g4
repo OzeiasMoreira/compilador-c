@@ -18,7 +18,7 @@ statement:
     | forStatement
     | scanfStatement
     | doWhileStatement
-    | switchStatement // <-- ADICIONADO
+    | switchStatement
     ;
 
 ifStatement:
@@ -41,17 +41,14 @@ doWhileStatement:
     DO block WHILE LPAREN expression RPAREN SEMI
     ;
 
-// Nova regra para o switch
 switchStatement:
     SWITCH LPAREN expression RPAREN LBRACE caseBlock* defaultBlock? RBRACE
     ;
 
-// Bloco 'case', simplificado para INT
 caseBlock:
     CASE INT COLON statement* (BREAK SEMI)?
     ;
 
-// Bloco 'default'
 defaultBlock:
     DEFAULT COLON statement* (BREAK SEMI)?
     ;
@@ -76,7 +73,17 @@ simpleDeclaration: type ID;
 assignment: simpleAssignment SEMI;
 simpleAssignment: ID ASSIGN expression;
 
-expression: relExpr;
+// --- CADEIA DE EXPRESSÃO ATUALIZADA ---
+expression: logicalOrExpr; // <-- MUDANÇA 1
+
+logicalOrExpr: // <-- NOVA REGRA
+    logicalAndExpr (OR logicalAndExpr)*
+    ;
+
+logicalAndExpr: // <-- NOVA REGRA
+    relExpr (AND relExpr)*
+    ;
+// --- FIM DA ATUALIZAÇÃO ---
 
 relExpr:
     addExpr ( (GT | LT | EQ | NEQ) addExpr )*
@@ -116,27 +123,29 @@ MINUS: '-';
 MULT: '*';
 DIV: '/';
 
-// Tokens de Controlo e Relacionais
+// Tokens de Controle e Relacionais
 IF: 'if';
 ELSE: 'else';
 WHILE: 'while';
 FOR: 'for';
 DO: 'do';
-SWITCH: 'switch'; // <-- ADICIONADO
-CASE: 'case';     // <-- ADICIONADO
-DEFAULT: 'default'; // <-- ADICIONADO
-BREAK: 'break';   // <-- ADICIONADO
+SWITCH: 'switch';
+CASE: 'case';
+DEFAULT: 'default';
+BREAK: 'break';
 EQ: '==';
 NEQ: '!=';
 GT: '>';
 LT: '<';
+AND: '&&'; // <-- ADICIONADO
+OR: '||';  // <-- ADICIONADO
 
 // Tokens do Printf e Scanf
 PRINTF: 'printf';
 SCANF: 'scanf';
 COMMA: ',';
 AMPERSAND: '&';
-COLON: ':';     // <-- ADICIONADO
+COLON: ':';
 
 ID: [a-zA-Z_] [a-zA-Z_0-9]*;
 INT: [0-9]+;

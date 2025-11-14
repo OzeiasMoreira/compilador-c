@@ -9,7 +9,7 @@ public class SymbolTable {
 
     public void add(String name, String type) {
         if (table.containsKey(name)) {
-            throw new RuntimeException("Error: Variable '" + name + "' already declared.");
+            throw new RuntimeException("Erro: Variável '" + name + "' já declarada.");
         }
         table.put(name, new Symbol(type, null));
     }
@@ -20,26 +20,28 @@ public class SymbolTable {
 
     public String getType(String name) {
         if (!contains(name)) {
-            throw new RuntimeException("Error: Variable '" + name + "' not declared.");
+            throw new RuntimeException("Erro: Variável '" + name + "' não declarada.");
         }
         return table.get(name).type;
     }
 
     public void assign(String name, Object value) {
         if (!contains(name)) {
-            throw new RuntimeException("Error: Variable '" + name + "' not declared.");
+            throw new RuntimeException("Erro: Variável '" + name + "' não declarada.");
         }
         table.get(name).value = value;
     }
 
     public Object resolve(String name) {
         if (!contains(name)) {
-            throw new RuntimeException("Error: Variable '" + name + "' not declared.");
+            throw new RuntimeException("Erro: Variável '" + name + "' não declarada.");
         }
-        // Lidar com valor nulo se a variável foi declarada mas não inicializada
         Object value = table.get(name).value;
         if (value == null) {
-            throw new RuntimeException("Error: Variable '" + name + "' may not have been initialized.");
+            // Em C, ler uma variável não inicializada é um comportamento indefinido.
+            // Para um interpretador, podemos lançar um erro ou retornar um valor padrão (ex: 0).
+            // Lançar erro é mais seguro para depuração.
+            throw new RuntimeException("Erro: Variável '" + name + "' pode não ter sido inicializada.");
         }
         return value;
     }
