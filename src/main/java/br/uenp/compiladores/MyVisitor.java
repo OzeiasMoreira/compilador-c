@@ -1,6 +1,6 @@
 package br.uenp.compiladores;
 
-// --- IMPORTS CORRIGIDOS ---
+// ... (imports existentes)
 import java.util.Scanner;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,18 +24,21 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         throw new RuntimeException("Erro de tipo: não é possível avaliar a expressão como booleana.");
     }
 
-    // --- PONTO DE ENTRADA (Atualizado para Structs) ---
+    // --- PONTO DE ENTRADA (Atualizado) ---
 
     @Override
     public Object visitProgram(CSubsetParser.ProgramContext ctx) {
-        // 1º Passo: Registar todas as definições (structs e funções)
+        // 1º Passo: Registar todas as definições globais
 
-        // Registar Structs (NOVO)
         for (CSubsetParser.StructDefinitionContext structCtx : ctx.structDefinition()) {
             visit(structCtx);
         }
 
-        // Registar Funções
+        // NOVO: Registar Unions
+        for (CSubsetParser.UnionDefinitionContext unionCtx : ctx.unionDefinition()) {
+            visit(unionCtx);
+        }
+
         for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
             visit(funcCtx);
         }
@@ -53,7 +56,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         return null;
     }
 
-    // --- NOVOS MÉTODOS (Structs) ---
+    // --- MÉTODOS DE STRUCT/UNION (Atualizados) ---
 
     @Override
     public Object visitStructDefinition(CSubsetParser.StructDefinitionContext ctx) {
@@ -71,54 +74,49 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         return null;
     }
 
+    // NOVO MÉTODO
+    @Override
+    public Object visitUnionDefinition(CSubsetParser.UnionDefinitionContext ctx) {
+        String unionName = ctx.ID().getText();
+        System.out.println("SEMÂNTICA: Registando union '" + unionName + "'");
+
+        // Reutilizamos a StructDefinition para o "plano"
+        StructDefinition def = new StructDefinition();
+        for (CSubsetParser.StructMemberContext memberCtx : ctx.structMember()) {
+            String type = memberCtx.type().getText();
+            String name = memberCtx.ID().getText();
+            def.addMember(name, type);
+        }
+
+        symbolTable.addUnionDefinition(unionName, def);
+        return null;
+    }
+
     @Override
     public Object visitMemberAccess(CSubsetParser.MemberAccessContext ctx) {
-        String instanceName = ctx.ID(0).getText(); // O 'p1'
-        String memberName = ctx.ID(1).getText(); // O 'x'
+        String instanceName = ctx.ID(0).getText();
+        String memberName = ctx.ID(1).getText();
 
         try {
             Object obj = symbolTable.resolve(instanceName);
-            if (!(obj instanceof StructInstance)) {
-                throw new RuntimeException("Erro: Tentando aceder a membro '" + memberName + "' de algo que não é uma struct ('" + instanceName + "').");
-            }
-            StructInstance instance = (StructInstance) obj;
 
-            System.out.println("INTERPRETADOR: Lendo " + instanceName + "." + memberName);
-            return instance.read(memberName);
+            // ATUALIZADO: Verifica se é Struct OU Union
+            if (obj instanceof StructInstance) {
+                StructInstance instance = (StructInstance) obj;
+                System.out.println("INTERPRETADOR: Lendo " + instanceName + "." + memberName);
+                return instance.read(memberName);
+            } else if (obj instanceof UnionInstance) {
+                UnionInstance instance = (UnionInstance) obj;
+                System.out.println("INTERPRETADOR: Lendo " + instanceName + "." + memberName);
+                return instance.read(memberName);
+            } else {
+                throw new RuntimeException("Erro: Tentando aceder a membro '" + memberName + "' de algo que não é uma struct ou union.");
+            }
 
         } catch (RuntimeException e) {
             System.err.println(e.getMessage());
             return null;
         }
-    }
-
-    // --- MÉTODOS ATUALIZADOS (Structs) ---
-
-    @Override
-    public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
-        String varType = ctx.type().getText();
-        String varName = ctx.ID().getText();
-        System.out.println("SEMÂNTICA: Declarando variável '" + varName + "' do tipo '" + varType + "'");
-
-        try {
-            symbolTable.add(varName, varType);
-
-            if (ctx.LBRACKET() != null) {
-                int size = Integer.parseInt(ctx.INT().getText());
-                Object[] array = new Object[size];
-                System.out.println("INTERPRETADOR: Alocando array '" + varName + "' com tamanho " + size);
-                symbolTable.assign(varName, array);
-
-            } else if (ctx.ASSIGN() != null) {
-                Object value = visit(ctx.expression());
-                System.out.println("INTERPRETADOR: Inicializando '" + varName + "' com " + value);
-                symbolTable.assign(varName, value);
-            }
-
-        } catch (RuntimeException e) {
-            System.err.println(e.getMessage());
-        }
-        return null;
     }
 
     @Override
@@ -135,6 +133,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             }
         }
         else if (ctx.arrayAccess() != null) {
+            // ... (lógica do array, sem mudanças)
             String varName = ctx.arrayAccess().ID().getText();
             try {
                 Object arrayObj = symbolTable.resolve(varName);
@@ -159,13 +158,19 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
 
             try {
                 Object obj = symbolTable.resolve(instanceName);
-                if (!(obj instanceof StructInstance)) {
-                    throw new RuntimeException("Erro: Tentando aceder a membro '" + memberName + "' de algo que não é uma struct.");
-                }
-                StructInstance instance = (StructInstance) obj;
 
-                System.out.println("INTERPRETADOR: Atribuindo " + value + " para " + instanceName + "." + memberName);
-                instance.write(memberName, value);
+                // ATUALIZADO: Verifica se é Struct OU Union
+                if (obj instanceof StructInstance) {
+                    StructInstance instance = (StructInstance) obj;
+                    System.out.println("INTERPRETADOR: Atribuindo " + value + " para " + instanceName + "." + memberName);
+                    instance.write(memberName, value);
+                } else if (obj instanceof UnionInstance) {
+                    UnionInstance instance = (UnionInstance) obj;
+                    System.out.println("INTERPRETADOR: Atribuindo " + value + " para " + instanceName + "." + memberName);
+                    instance.write(memberName, value);
+                } else {
+                    throw new RuntimeException("Erro: Tentando aceder a membro '" + memberName + "' de algo que não é uma struct ou union.");
+                }
 
             } catch (RuntimeException e) {
                 System.err.println(e.getMessage());
@@ -188,6 +193,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         }
         if (ctx.ID() != null) {
             try {
+                // 'resolve' agora pode retornar int, float, array, StructInstance ou UnionInstance
                 return symbolTable.resolve(ctx.ID().getText());
             } catch (RuntimeException e) {
                 System.err.println(e.getMessage());
@@ -212,6 +218,31 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     // --- MÉTODOS RESTANTES (Sem mudanças) ---
 
     @Override
+    public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
+        String varType = ctx.type().getText(); // Agora pode ser 'structPonto' ou 'unionValor'
+        String varName = ctx.ID().getText();
+        System.out.println("SEMÂNTICA: Declarando variável '" + varName + "' do tipo '" + varType + "'");
+        try {
+            // 'add' agora trata a criação de StructInstance e UnionInstance
+            symbolTable.add(varName, varType);
+
+            if (ctx.LBRACKET() != null) {
+                int size = Integer.parseInt(ctx.INT().getText());
+                Object[] array = new Object[size];
+                System.out.println("INTERPRETADOR: Alocando array '" + varName + "' com tamanho " + size);
+                symbolTable.assign(varName, array);
+            } else if (ctx.ASSIGN() != null) {
+                Object value = visit(ctx.expression());
+                System.out.println("INTERPRETADOR: Inicializando '" + varName + "' com " + value);
+                symbolTable.assign(varName, value);
+            }
+        } catch (RuntimeException e) {
+            System.err.println(e.getMessage());
+        }
+        return null;
+    }
+
+    @Override
     public Object visitUnaryExpr(CSubsetParser.UnaryExprContext ctx) {
         Object value = visit(ctx.relExpr());
         int notCount = ctx.NOT().size();
@@ -225,7 +256,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             return boolValue;
         }
     }
-
     @Override
     public Object visitDeclaration(CSubsetParser.DeclarationContext ctx) {
         return visit(ctx.simpleDeclaration());

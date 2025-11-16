@@ -4,8 +4,7 @@ grammar CSubset;
 package br.uenp.compiladores;
 }
 
-// Definições de topo agora podem ser structs ou funções
-program: (structDefinition | functionDeclaration)+;
+program: (structDefinition | unionDefinition | functionDeclaration)+;
 
 functionDeclaration:
     type ID LPAREN paramList? RPAREN block
@@ -17,23 +16,25 @@ param:
     type ID
     ;
 
-//
-// --- NOVAS REGRAS PARA STRUCT ---
-//
-// Define uma struct (ex: struct Ponto { int x; };)
+unionDefinition:
+    UNION ID LBRACE structMember+ RBRACE SEMI
+    ;
+
 structDefinition:
     STRUCT ID LBRACE structMember+ RBRACE SEMI
     ;
 
+//
+// --- ESTA ERA A REGRA EM FALTA ---
+//
 structMember:
     type ID SEMI
     ;
+// --- FIM DA CORREÇÃO ---
 
-// Acesso a membro (ex: p1.x)
 memberAccess:
     ID DOT ID
     ;
-// --- FIM DAS NOVAS REGRAS ---
 
 statement:
     declaration
@@ -49,7 +50,6 @@ statement:
     | returnStatement
     ;
 
-// ... (regras 'return' até 'for' sem mudanças) ...
 returnStatement:
     RETURN expression? SEMI
     ;
@@ -88,19 +88,14 @@ forInit:
     | simpleAssignment
     ;
 block: LBRACE statement* RBRACE;
-
-// Declaração de variável (sem mudanças, já suporta 'type ID')
 declaration: simpleDeclaration SEMI;
 simpleDeclaration:
     type ID ( (LBRACKET INT RBRACKET) | (ASSIGN expression) )?
     ;
-
-// Atribuição agora suporta p1.x = 10
 assignment: simpleAssignment SEMI;
 simpleAssignment:
-    (ID | arrayAccess | memberAccess) ASSIGN expression // <-- ATUALIZADO
+    (ID | arrayAccess | memberAccess) ASSIGN expression
     ;
-
 expression: logicalOrExpr;
 logicalOrExpr:
     logicalAndExpr (OR logicalAndExpr)*
@@ -120,8 +115,6 @@ addExpr:
 multExpr:
     primaryExpr ( (MULT | DIV) primaryExpr )*
     ;
-
-// Leitura de p1.x adicionada
 primaryExpr:
       INT
     | FLOAT
@@ -129,10 +122,9 @@ primaryExpr:
     | ID
     | functionCall
     | arrayAccess
-    | memberAccess // <-- ADICIONADO
+    | memberAccess
     | LPAREN expression RPAREN
     ;
-
 functionCall:
     ID LPAREN argList? RPAREN
     ;
@@ -143,23 +135,24 @@ argList:
     expression (COMMA expression)*
     ;
 
-//
-// --- REGRA 'type' ATUALIZADA ---
-//
 type:
-    (T_INT | T_FLOAT | T_CHAR) // Tipos primitivos
-    | structType               // Ou um tipo struct
+    (T_INT | T_FLOAT | T_CHAR)
+    | structType
+    | unionType
     ;
-
-structType: // ex: struct Ponto
+structType:
     STRUCT ID
+    ;
+unionType:
+    UNION ID
     ;
 
 // --- TOKENS ---
 T_INT: 'int';
 T_FLOAT: 'float';
 T_CHAR: 'char';
-STRUCT: 'struct'; // <-- ADICIONADO
+STRUCT: 'struct';
+UNION: 'union';
 ASSIGN: '=';
 LPAREN: '(';
 RPAREN: ')';
@@ -168,9 +161,7 @@ RBRACE: '}';
 SEMI: ';';
 LBRACKET: '[';
 RBRACKET: ']';
-DOT: '.'; // <-- ADICIONADO
-
-// ... (restante dos tokens sem mudanças) ...
+DOT: '.';
 PLUS: '+';
 MINUS: '-';
 MULT: '*';

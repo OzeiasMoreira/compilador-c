@@ -8,15 +8,16 @@ public class SymbolTable {
 
     private Stack<Map<String, Symbol>> scopeStack = new Stack<>();
     private Map<String, FunctionSymbol> functionTable = new HashMap<>();
-
-    // NOVO: Tabela para definições de struct (sempre global)
     private Map<String, StructDefinition> structTable = new HashMap<>();
+
+    // Tabela para definições de union
+    private Map<String, StructDefinition> unionTable = new HashMap<>();
 
     public SymbolTable() {
         enterScope(); // Adiciona o escopo global
     }
 
-    // --- Métodos de Escopo (sem mudanças) ---
+    // --- Métodos de Escopo ---
     public void enterScope() {
         scopeStack.push(new HashMap<String, Symbol>());
     }
@@ -34,10 +35,10 @@ public class SymbolTable {
         return scopeStack.peek();
     }
 
-    // --- Métodos de Função (sem mudanças) ---
+    // --- Métodos de Função ---
     public void addFunction(String name, FunctionSymbol function) {
-        if (functionTable.containsKey(name) || structTable.containsKey(name)) {
-            throw new RuntimeException("Erro: Função '" + name + "' já declarada ou nome conflita com struct.");
+        if (functionTable.containsKey(name) || structTable.containsKey(name) || unionTable.containsKey(name)) {
+            throw new RuntimeException("Erro: Conflito de nome. Já existe uma função, struct ou union chamada '" + name + "'.");
         }
         functionTable.put(name, function);
     }
@@ -48,65 +49,78 @@ public class SymbolTable {
         return functionTable.get(name);
     }
 
-    // --- MÉTODOS DE STRUCT (NOVOS) ---
-
-    /**
-     * Adiciona uma nova definição de struct (plano) à tabela global.
-     */
+    // --- Métodos de Struct ---
     public void addStructDefinition(String name, StructDefinition def) {
-        if (structTable.containsKey(name) || functionTable.containsKey(name)) {
-            throw new RuntimeException("Erro: Nome '" + name + "' já definido (como struct ou função).");
+        if (structTable.containsKey(name) || functionTable.containsKey(name) || unionTable.containsKey(name)) {
+            throw new RuntimeException("Erro: Nome '" + name + "' já definido.");
         }
         structTable.put(name, def);
     }
-
-    /**
-     * Procura por uma definição de struct.
-     */
     public StructDefinition resolveStructDefinition(String name) {
         if (!structTable.containsKey(name)) {
             throw new RuntimeException("Erro: Tipo struct '" + name + "' não definido.");
         }
         return structTable.get(name);
     }
-
-    /**
-     * Verifica se um nome de tipo (ex: "struct Ponto") é um tipo struct válido.
-     */
     public boolean isStructType(String typeName) {
-        // O tipo vem da gramática como "structPonto"
         if (typeName.startsWith("struct")) {
-            String name = typeName.substring(6); // Remove "struct"
+            String name = typeName.substring(6);
             return structTable.containsKey(name);
         }
         return false;
     }
 
-    // --- Métodos de Variáveis (Atualizados) ---
+    // --- MÉTODOS DE UNION ---
+    public void addUnionDefinition(String name, StructDefinition def) {
+        if (unionTable.containsKey(name) || structTable.containsKey(name) || functionTable.containsKey(name)) {
+            throw new RuntimeException("Erro: Nome '" + name + "' já definido.");
+        }
+        unionTable.put(name, def);
+    }
+    public StructDefinition resolveUnionDefinition(String name) {
+        if (!unionTable.containsKey(name)) {
+            throw new RuntimeException("Erro: Tipo union '" + name + "' não definido.");
+        }
+        return unionTable.get(name);
+    }
+    public boolean isUnionType(String typeName) {
+        if (typeName.startsWith("union")) {
+            String name = typeName.substring(5); // Remove "union"
+            return unionTable.containsKey(name);
+        }
+        return false;
+    }
+
+
+    // --- Métodos de Variáveis (Corrigidos, sem @Override) ---
 
     /**
      * Adiciona uma variável ao escopo atual.
-     * Se for um tipo struct, já instancia o objeto StructInstance.
      */
+    // @Override <- REMOVIDO
     public void add(String name, String type) {
         Map<String, Symbol> currentScope = getCurrentScope();
 
         if (currentScope.containsKey(name)) {
             throw new RuntimeException("Erro: Variável '" + name + "' já declarada neste escopo.");
         }
-        if (functionTable.containsKey(name) || structTable.containsKey(name)) {
-            throw new RuntimeException("Erro: Conflito de nome. Já existe uma função ou struct chamada '" + name + "'.");
+        if (functionTable.containsKey(name) || structTable.containsKey(name) || unionTable.containsKey(name)) {
+            throw new RuntimeException("Erro: Conflito de nome. Já existe uma função, struct ou union chamada '" + name + "'.");
         }
 
-        // Se for um tipo struct (ex: "structPonto")
         if (isStructType(type)) {
-            String structName = type.substring(6); // Remove "struct"
+            String structName = type.substring(6);
             StructDefinition def = resolveStructDefinition(structName);
-            // Cria a instância e armazena-a como o "valor" inicial do símbolo
             StructInstance instance = new StructInstance(def);
             currentScope.put(name, new Symbol(type, instance));
-        } else {
-            // Comportamento normal para int, float, char
+        }
+        else if (isUnionType(type)) {
+            String unionName = type.substring(5);
+            StructDefinition def = resolveUnionDefinition(unionName);
+            UnionInstance instance = new UnionInstance(def);
+            currentScope.put(name, new Symbol(type, instance));
+        }
+        else {
             currentScope.put(name, new Symbol(type, null));
         }
     }
@@ -121,26 +135,26 @@ public class SymbolTable {
         return null;
     }
 
+    // @Override <- REMOVIDO
     public void assign(String name, Object value) {
         Symbol symbol = find(name);
         if (symbol == null) {
             throw new RuntimeException("Erro: Variável '" + name + "' não declarada.");
         }
-        // Não podemos atribuir um valor normal a uma struct inteira
-        if (symbol.value instanceof StructInstance) {
-            throw new RuntimeException("Erro: Não é possível atribuir a uma variável struct inteira. Use 'struct.membro'.");
+        if (symbol.value instanceof StructInstance || symbol.value instanceof UnionInstance) {
+            throw new RuntimeException("Erro: Não é possível atribuir a uma variável struct/union inteira. Use '.membro'.");
         }
         symbol.value = value;
     }
 
+    // @Override <- REMOVIDO
     public Object resolve(String name) {
         Symbol symbol = find(name);
         if (symbol == null) {
             throw new RuntimeException("Erro: Variável '" + name + "' não declarada.");
         }
 
-        // Se for uma struct, retornamos a própria instância
-        if (symbol.value instanceof StructInstance) {
+        if (symbol.value instanceof StructInstance || symbol.value instanceof UnionInstance) {
             return symbol.value;
         }
 
@@ -151,6 +165,7 @@ public class SymbolTable {
         return value;
     }
 
+    // @Override <- REMOVIDO
     public String getType(String name) {
         Symbol symbol = find(name);
         if (symbol == null) {
@@ -159,6 +174,7 @@ public class SymbolTable {
         return symbol.type;
     }
 
+    // @Override <- REMOVIDO
     public boolean isFunction(String name) {
         return functionTable.containsKey(name);
     }
