@@ -1,12 +1,12 @@
 // Em teste.c
-int main() {
-    int x = 5;
+#include <stdio.h> // Deve ser ignorado
 
-    if (x >= 5) {
-        printf("x eh maior ou igual a 5\n"); // Deve imprimir
-    }
+// Função 'void'
+void imprimir(int valor) {
+    printf("O valor eh: %d\n", valor);
+    return; // 'return' vazio
+}
 
-    if (x <= 10) {
-        printf("x eh menor ou igual a 10\n"); // Deve imprimir
-    }
+void main() {
+    imprimir(123);
 }

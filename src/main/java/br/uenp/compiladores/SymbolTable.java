@@ -10,35 +10,21 @@ public class SymbolTable {
     private Map<String, FunctionSymbol> functionTable = new HashMap<>();
     private Map<String, StructDefinition> structTable = new HashMap<>();
     private Map<String, StructDefinition> unionTable = new HashMap<>();
-
-    // NOVO: Tabela para constantes #define (globais)
     private Map<String, Object> defineTable = new HashMap<>();
 
     public SymbolTable() {
-        enterScope(); // Adiciona o escopo global
+        enterScope();
     }
 
-    // --- Métodos de Escopo (sem mudanças) ---
-    public void enterScope() {
-        scopeStack.push(new HashMap<String, Symbol>());
-    }
-    public void exitScope() {
-        if (!scopeStack.isEmpty()) {
-            scopeStack.pop();
-        } else {
-            throw new RuntimeException("Erro interno: Não há escopo para sair.");
-        }
-    }
-    private Map<String, Symbol> getCurrentScope() {
-        if (scopeStack.isEmpty()) {
-            throw new RuntimeException("Erro interno: A pilha de escopos está vazia.");
-        }
-        return scopeStack.peek();
-    }
+    // --- Métodos de Escopo ---
+    public void enterScope() { scopeStack.push(new HashMap<String, Symbol>()); }
+    public void exitScope() { scopeStack.pop(); }
+    private Map<String, Symbol> getCurrentScope() { return scopeStack.peek(); }
 
-    // --- Métodos de Função (sem mudanças) ---
+    // --- Métodos de Função (Corrigido) ---
     public void addFunction(String name, FunctionSymbol function) {
-        if (defineTable.containsKey(name) || functionTable.containsKey(name) || structTable.containsKey(name) || unionTable.containsKey(name)) { // <-- ATUALIZADO
+        // CORRIGIDO: Adicionado defineTable.containsKey(name)
+        if (defineTable.containsKey(name) || functionTable.containsKey(name) || structTable.containsKey(name) || unionTable.containsKey(name)) {
             throw new RuntimeException("Erro: Conflito de nome. Já existe um define/função/struct/union chamada '" + name + "'.");
         }
         functionTable.put(name, function);
@@ -50,7 +36,7 @@ public class SymbolTable {
         return functionTable.get(name);
     }
 
-    // --- Métodos de Struct (sem mudanças) ---
+    // --- Métodos de Struct ---
     public void addStructDefinition(String name, StructDefinition def) {
         if (defineTable.containsKey(name) || structTable.containsKey(name) || functionTable.containsKey(name) || unionTable.containsKey(name)) {
             throw new RuntimeException("Erro: Nome '" + name + "' já definido.");
@@ -71,7 +57,7 @@ public class SymbolTable {
         return false;
     }
 
-    // --- Métodos de Union (sem mudanças) ---
+    // --- Métodos de Union ---
     public void addUnionDefinition(String name, StructDefinition def) {
         if (defineTable.containsKey(name) || unionTable.containsKey(name) || structTable.containsKey(name) || functionTable.containsKey(name)) {
             throw new RuntimeException("Erro: Nome '" + name + "' já definido.");
@@ -92,8 +78,7 @@ public class SymbolTable {
         return false;
     }
 
-    // --- MÉTODOS DE DEFINE (NOVOS) ---
-
+    // --- Métodos de Define ---
     public void addDefine(String name, Object value) {
         if (defineTable.containsKey(name)) {
             throw new RuntimeException("Erro: Constante '" + name + "' já definida.");
@@ -103,30 +88,25 @@ public class SymbolTable {
         }
         defineTable.put(name, value);
     }
-
     public boolean isDefine(String name) {
         return defineTable.containsKey(name);
     }
-
     public Object resolveDefine(String name) {
         return defineTable.get(name);
     }
 
-
-    // --- Métodos de Variáveis (Atualizados) ---
-
+    // --- Métodos de Variáveis (Corrigido) ---
     public void add(String name, String type) {
         Map<String, Symbol> currentScope = getCurrentScope();
 
-        // Conflito com #define?
-        if (defineTable.containsKey(name)) {
-            throw new RuntimeException("Erro: Conflito de nome. Já existe uma constante '#define' chamada '" + name + "'.");
+        if (defineTable.containsKey(name) || functionTable.containsKey(name) || structTable.containsKey(name) || unionTable.containsKey(name)) {
+            throw new RuntimeException("Erro: Conflito de nome. Já existe um define/função/struct/union chamada '" + name + "'.");
         }
         if (currentScope.containsKey(name)) {
             throw new RuntimeException("Erro: Variável '" + name + "' já declarada neste escopo.");
         }
-        if (functionTable.containsKey(name) || structTable.containsKey(name) || unionTable.containsKey(name)) {
-            throw new RuntimeException("Erro: Conflito de nome. Já existe uma função, struct ou union chamada '" + name + "'.");
+        if (name.equals("void")) { // Verificação de 'void'
+            throw new RuntimeException("Erro: 'void' não é um nome de variável válido.");
         }
 
         if (isStructType(type)) {
@@ -172,11 +152,9 @@ public class SymbolTable {
         if (symbol == null) {
             throw new RuntimeException("Erro: Variável '" + name + "' não declarada.");
         }
-
         if (symbol.value instanceof StructInstance || symbol.value instanceof UnionInstance) {
             return symbol.value;
         }
-
         Object value = symbol.value;
         if (value == null) {
             throw new RuntimeException("Erro: Variável '" + name + "' pode não ter sido inicializada.");

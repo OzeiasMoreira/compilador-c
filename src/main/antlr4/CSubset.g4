@@ -4,7 +4,7 @@ grammar CSubset;
 package br.uenp.compiladores;
 }
 
-program: (defineDirective | structDefinition | unionDefinition | functionDeclaration)+;
+program: (defineDirective | includeDirective | structDefinition | unionDefinition | functionDeclaration)+;
 
 functionDeclaration:
     type ID LPAREN paramList? RPAREN block
@@ -18,6 +18,9 @@ param:
 
 defineDirective:
     HASH DEFINE ID (INT | FLOAT)
+    ;
+includeDirective:
+    HASH INCLUDE INCLUDE_HEADER
     ;
 unionDefinition:
     UNION ID LBRACE structMember+ RBRACE SEMI
@@ -38,17 +41,29 @@ statement:
     | block
     | ifStatement
     | printfStatement
+    | scanfStatement
+    | putsStatement
     | whileStatement
     | forStatement
-    | scanfStatement
     | doWhileStatement
     | switchStatement
     | returnStatement
+    | functionCallStatement // <-- ADICIONADO
     ;
 
 returnStatement:
     RETURN expression? SEMI
     ;
+
+//
+// --- NOVA REGRA ADICIONADA ---
+//
+// Permite que uma chamada de função seja uma instrução
+functionCallStatement:
+    functionCall SEMI
+    ;
+// --- FIM DA NOVA REGRA ---
+
 ifStatement:
     IF LPAREN expression RPAREN block (ELSE block)?
     ;
@@ -57,6 +72,9 @@ printfStatement:
     ;
 scanfStatement:
     SCANF LPAREN STRING_LITERAL COMMA AMPERSAND ID RPAREN SEMI
+    ;
+putsStatement:
+    PUTS LPAREN STRING_LITERAL RPAREN SEMI
     ;
 whileStatement:
     WHILE LPAREN expression RPAREN block
@@ -105,15 +123,9 @@ logicalOrExpr:
 logicalAndExpr:
     relExpr (AND relExpr)*
     ;
-
-//
-// --- REGRA 'relExpr' ATUALIZADA ---
-//
 relExpr:
     addExpr ( (GT | GTE | LT | LTE | EQ | NEQ) addExpr )*
     ;
-// --- FIM DA ATUALIZAÇÃO ---
-
 addExpr:
     multExpr ( (PLUS | MINUS) multExpr )*
     ;
@@ -146,7 +158,7 @@ argList:
     ;
 
 type:
-    (T_INT | T_FLOAT | T_CHAR) (STAR)?
+    (T_INT | T_FLOAT | T_CHAR | T_VOID) (STAR)?
     | structType
     | unionType
     ;
@@ -161,6 +173,7 @@ unionType:
 T_INT: 'int';
 T_FLOAT: 'float';
 T_CHAR: 'char';
+T_VOID: 'void';
 STRUCT: 'struct';
 UNION: 'union';
 ASSIGN: '=';
@@ -189,25 +202,28 @@ RETURN: 'return';
 EQ: '==';
 NEQ: '!=';
 GT: '>';
-GTE: '>='; // <-- ADICIONADO
+GTE: '>=';
 LT: '<';
-LTE: '<='; // <-- ADICIONADO
+LTE: '<=';
 AND: '&&';
 OR: '||';
 NOT: '!';
 PRINTF: 'printf';
 SCANF: 'scanf';
+PUTS: 'puts';
 COMMA: ',';
 AMPERSAND: '&';
 COLON: ':';
 HASH: '#';
 DEFINE: 'define';
+INCLUDE: 'include';
 
 ID: [a-zA-Z_] [a-zA-Z_0-9]*;
 INT: [0-9]+;
 FLOAT: [0-9]+ '.' [0-9]+;
 CHAR_LITERAL: '\'' . '\'';
 STRING_LITERAL: '"' ( '\\' . | ~('\\'|'"') )* '"';
+INCLUDE_HEADER: '<' [a-zA-Z_0-9]+ ('.' 'h')? '>';
 
 WS: [ \t\r\n]+ -> skip;
 LINE_COMMENT: '//' .*? '\n' -> skip;
