@@ -1,6 +1,5 @@
 package br.uenp.compiladores;
 
-// ... (imports existentes)
 import java.util.Scanner;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,157 +23,211 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         throw new RuntimeException("Erro de tipo: não é possível avaliar a expressão como booleana.");
     }
 
-    // --- PONTO DE ENTRADA (Atualizado) ---
+    // --- LÓGICA DO PRINTF (CORRIGIDA) ---
 
     @Override
-    public Object visitProgram(CSubsetParser.ProgramContext ctx) {
-        // 1º Passo: Registar todas as definições globais
+    public Object visitPrintfStatement(CSubsetParser.PrintfStatementContext ctx) {
+        String formatString = ctx.STRING_LITERAL().getText();
+        formatString = formatString.substring(1, formatString.length() - 1);
 
-        for (CSubsetParser.StructDefinitionContext structCtx : ctx.structDefinition()) {
-            visit(structCtx);
-        }
+        if (ctx.argList() != null) {
+            for (CSubsetParser.ExpressionContext exprCtx : ctx.argList().expression()) {
+                Object value = visit(exprCtx);
 
-        // NOVO: Registar Unions
-        for (CSubsetParser.UnionDefinitionContext unionCtx : ctx.unionDefinition()) {
-            visit(unionCtx);
-        }
-
-        for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
-            visit(funcCtx);
-        }
-
-        // 2º Passo: Encontrar e executar 'main'
-        FunctionSymbol mainFunction = symbolTable.resolveFunction("main");
-        if (mainFunction == null) {
-            throw new RuntimeException("Erro: Função 'main' não encontrada.");
-        }
-        try {
-            executeFunction(mainFunction, new ArrayList<>());
-        } catch (ReturnException re) {
-            // Ignorar
-        }
-        return null;
-    }
-
-    // --- MÉTODOS DE STRUCT/UNION (Atualizados) ---
-
-    @Override
-    public Object visitStructDefinition(CSubsetParser.StructDefinitionContext ctx) {
-        String structName = ctx.ID().getText();
-        System.out.println("SEMÂNTICA: Registando struct '" + structName + "'");
-
-        StructDefinition def = new StructDefinition();
-        for (CSubsetParser.StructMemberContext memberCtx : ctx.structMember()) {
-            String type = memberCtx.type().getText();
-            String name = memberCtx.ID().getText();
-            def.addMember(name, type);
-        }
-
-        symbolTable.addStructDefinition(structName, def);
-        return null;
-    }
-
-    // NOVO MÉTODO
-    @Override
-    public Object visitUnionDefinition(CSubsetParser.UnionDefinitionContext ctx) {
-        String unionName = ctx.ID().getText();
-        System.out.println("SEMÂNTICA: Registando union '" + unionName + "'");
-
-        // Reutilizamos a StructDefinition para o "plano"
-        StructDefinition def = new StructDefinition();
-        for (CSubsetParser.StructMemberContext memberCtx : ctx.structMember()) {
-            String type = memberCtx.type().getText();
-            String name = memberCtx.ID().getText();
-            def.addMember(name, type);
-        }
-
-        symbolTable.addUnionDefinition(unionName, def);
-        return null;
-    }
-
-    @Override
-    public Object visitMemberAccess(CSubsetParser.MemberAccessContext ctx) {
-        String instanceName = ctx.ID(0).getText();
-        String memberName = ctx.ID(1).getText();
-
-        try {
-            Object obj = symbolTable.resolve(instanceName);
-
-            // ATUALIZADO: Verifica se é Struct OU Union
-            if (obj instanceof StructInstance) {
-                StructInstance instance = (StructInstance) obj;
-                System.out.println("INTERPRETADOR: Lendo " + instanceName + "." + memberName);
-                return instance.read(memberName);
-            } else if (obj instanceof UnionInstance) {
-                UnionInstance instance = (UnionInstance) obj;
-                System.out.println("INTERPRETADOR: Lendo " + instanceName + "." + memberName);
-                return instance.read(memberName);
-            } else {
-                throw new RuntimeException("Erro: Tentando aceder a membro '" + memberName + "' de algo que não é uma struct ou union.");
+                if (formatString.contains("%d") && value instanceof Integer) {
+                    formatString = formatString.replaceFirst("%d", value.toString());
+                } else if (formatString.contains("%f") && (value instanceof Double || value instanceof Integer)) {
+                    formatString = formatString.replaceFirst("%f", value.toString());
+                } else if (formatString.contains("%c") && value instanceof Character) {
+                    formatString = formatString.replaceFirst("%c", value.toString());
+                }
             }
-
-        } catch (RuntimeException e) {
-            System.err.println(e.getMessage());
-            return null;
         }
+
+        formatString = formatString.replace("\\n", "\n");
+
+        // --- CORREÇÃO DO BUG DE IMPRESSÃO ---
+        System.out.print(formatString);
+        System.out.flush(); // Força a impressão para o console AGORA.
+        // --- FIM DA CORREÇÃO ---
+
+        return null;
     }
+
+    // --- LÓGICA DE EXPRESSÃO (Corrigida) ---
+
+    @Override
+    public Object visitLogicalAndExpr(CSubsetParser.LogicalAndExprContext ctx) {
+        // CORRIGIDO: Deve chamar relExpr
+        if (ctx.relExpr().size() < 2) {
+            return visit(ctx.relExpr(0));
+        }
+
+        Object left = visit(ctx.relExpr(0));
+        boolean leftBool = forceBoolean(left);
+
+        if (!leftBool) {
+            return false;
+        }
+
+        for (int i = 1; i < ctx.relExpr().size(); i++) {
+            Object right = visit(ctx.relExpr(i));
+            boolean rightBool = forceBoolean(right);
+
+            if (!rightBool) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public Object visitMultExpr(CSubsetParser.MultExprContext ctx) {
+        // CORRIGIDO: Deve chamar unaryExpr
+        Object left = visit(ctx.unaryExpr(0));
+        for (int i = 1; i < ctx.unaryExpr().size(); i++) {
+            Object right = visit(ctx.unaryExpr(i));
+            String op = ctx.getChild(i * 2 - 1).getText();
+
+            Number leftNum = promoteToNumber(left);
+            Number rightNum = promoteToNumber(right);
+
+            if (leftNum instanceof Double || rightNum instanceof Double) {
+                double leftVal = leftNum.doubleValue();
+                double rightVal = rightNum.doubleValue();
+                switch (op) {
+                    case "*": left = leftVal * rightVal; break;
+                    case "/":
+                        if (rightVal == 0.0) throw new RuntimeException("Erro: Divisão por zero.");
+                        left = leftVal / rightVal;
+                        break;
+                }
+            } else {
+                int leftVal = leftNum.intValue();
+                int rightVal = rightNum.intValue();
+                switch (op) {
+                    case "*": left = leftVal * rightVal; break;
+                    case "/":
+                        if (rightVal == 0) throw new RuntimeException("Erro: Divisão por zero.");
+                        left = leftVal / rightVal;
+                        break;
+                }
+            }
+        }
+        return left;
+    }
+
+    // --- MÉTODOS DE PONTEIRO (Corrigidos) ---
 
     @Override
     public Object visitSimpleAssignment(CSubsetParser.SimpleAssignmentContext ctx) {
-        Object value = visit(ctx.expression());
+        Object rhsValue = visit(ctx.expression());
+        CSubsetParser.LvalueContext lvalue = ctx.lvalue();
 
-        if (ctx.ID() != null) {
-            String varName = ctx.ID().getText();
-            System.out.println("INTERPRETADOR: Atribuindo " + value + " para '" + varName + "'");
-            try {
-                symbolTable.assign(varName, value);
-            } catch (RuntimeException e) {
-                System.err.println(e.getMessage());
+        try {
+            if (lvalue.ID() != null) {
+                String varName = lvalue.ID().getText();
+                System.out.println("INTERPRETADOR: Atribuindo " + rhsValue + " para '" + varName + "'");
+                symbolTable.assign(varName, rhsValue);
             }
-        }
-        else if (ctx.arrayAccess() != null) {
-            // ... (lógica do array, sem mudanças)
-            String varName = ctx.arrayAccess().ID().getText();
-            try {
+            else if (lvalue.arrayAccess() != null) {
+                String varName = lvalue.arrayAccess().ID().getText();
                 Object arrayObj = symbolTable.resolve(varName);
                 if (!(arrayObj instanceof Object[])) {
                     throw new RuntimeException("Erro: Tentando indexar uma variável ('" + varName + "') que não é um array.");
                 }
                 Object[] array = (Object[]) arrayObj;
-                Object indexObj = visit(ctx.arrayAccess().expression());
+                Object indexObj = visit(lvalue.arrayAccess().expression());
                 if (!(indexObj instanceof Integer)) {
                     throw new RuntimeException("Erro: Índice do array deve ser um inteiro.");
                 }
                 int index = (Integer) indexObj;
-                System.out.println("INTERPRETADOR: Atribuindo " + value + " para '" + varName + "[" + index + "]'");
-                array[index] = value;
-            } catch (RuntimeException e) {
-                System.err.println(e.getMessage());
+                System.out.println("INTERPRETADOR: Atribuindo " + rhsValue + " para '" + varName + "[" + index + "]'");
+                array[index] = rhsValue;
             }
-        }
-        else if (ctx.memberAccess() != null) {
-            String instanceName = ctx.memberAccess().ID(0).getText();
-            String memberName = ctx.memberAccess().ID(1).getText();
-
-            try {
+            else if (lvalue.memberAccess() != null) {
+                String instanceName = lvalue.memberAccess().ID(0).getText();
+                String memberName = lvalue.memberAccess().ID(1).getText();
                 Object obj = symbolTable.resolve(instanceName);
-
-                // ATUALIZADO: Verifica se é Struct OU Union
                 if (obj instanceof StructInstance) {
                     StructInstance instance = (StructInstance) obj;
-                    System.out.println("INTERPRETADOR: Atribuindo " + value + " para " + instanceName + "." + memberName);
-                    instance.write(memberName, value);
+                    System.out.println("INTERPRETADOR: Atribuindo " + rhsValue + " para " + instanceName + "." + memberName);
+                    instance.write(memberName, rhsValue);
                 } else if (obj instanceof UnionInstance) {
                     UnionInstance instance = (UnionInstance) obj;
-                    System.out.println("INTERPRETADOR: Atribuindo " + value + " para " + instanceName + "." + memberName);
-                    instance.write(memberName, value);
+                    System.out.println("INTERPRETADOR: Atribuindo " + rhsValue + " para " + instanceName + "." + memberName);
+                    instance.write(memberName, rhsValue);
                 } else {
                     throw new RuntimeException("Erro: Tentando aceder a membro '" + memberName + "' de algo que não é uma struct ou union.");
                 }
-
-            } catch (RuntimeException e) {
-                System.err.println(e.getMessage());
             }
+            else if (lvalue.unaryExpr() != null) {
+                // 'visit(lvalue.unaryExpr())' vai lidar com o '*'
+                Object resolvedName = visit(lvalue.unaryExpr());
+
+                if (!(resolvedName instanceof String)) {
+                    throw new RuntimeException("Erro: Tentativa de desreferência (escrita) em algo que não é um ponteiro.");
+                }
+                String varName = (String) resolvedName;
+
+                System.out.println("INTERPRETADOR: Atribuindo (via ponteiro) " + rhsValue + " para '" + varName + "'");
+                symbolTable.assign(varName, rhsValue);
+            }
+        } catch (RuntimeException e) {
+            System.err.println(e.getMessage());
+        }
+        return null;
+    }
+
+    @Override
+    public Object visitUnaryExpr(CSubsetParser.UnaryExprContext ctx) {
+        if (ctx.NOT() != null) {
+            Object value = visit(ctx.unaryExpr());
+            boolean boolValue = forceBoolean(value);
+            return !boolValue;
+        }
+        else if (ctx.AMPERSAND() != null) {
+            // Retorna o NOME da variável como o "endereço"
+            String varName = ctx.unaryExpr().getText();
+            System.out.println("INTERPRETADOR: Obtendo endereço de '" + varName + "'");
+            return varName;
+        }
+        else if (ctx.STAR() != null) {
+            Object ptrValue = visit(ctx.unaryExpr());
+            if (!(ptrValue instanceof String)) {
+                throw new RuntimeException("Erro: Tentativa de desreferência (leitura) em algo que não é um ponteiro.");
+            }
+            String varName = (String) ptrValue;
+            System.out.println("INTERPRETADOR: Lendo (via ponteiro) o valor de '" + varName + "'");
+            return symbolTable.resolve(varName);
+        }
+        else {
+            return visit(ctx.primaryExpr());
+        }
+    }
+
+    // --- MÉTODOS RESTANTES (Sem mudanças) ---
+    // (Apenas colados para garantir que o ficheiro está completo)
+
+    @Override
+    public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
+        String varType = ctx.type().getText();
+        String varName = ctx.ID().getText();
+        System.out.println("SEMÂNTICA: Declarando variável '" + varName + "' do tipo '" + varType + "'");
+        try {
+            symbolTable.add(varName, varType);
+            if (ctx.LBRACKET() != null) {
+                int size = Integer.parseInt(ctx.INT().getText());
+                Object[] array = new Object[size];
+                System.out.println("INTERPRETADOR: Alocando array '" + varName + "' com tamanho " + size);
+                symbolTable.assign(varName, array);
+            } else if (ctx.ASSIGN() != null) {
+                Object value = visit(ctx.expression());
+                System.out.println("INTERPRETADOR: Inicializando '" + varName + "' com " + value);
+                symbolTable.assign(varName, value);
+            }
+        } catch (RuntimeException e) {
+            System.err.println(e.getMessage());
         }
         return null;
     }
@@ -192,9 +245,12 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             return text.charAt(1);
         }
         if (ctx.ID() != null) {
+            String name = ctx.ID().getText();
+            if (symbolTable.isDefine(name)) {
+                return symbolTable.resolveDefine(name);
+            }
             try {
-                // 'resolve' agora pode retornar int, float, array, StructInstance ou UnionInstance
-                return symbolTable.resolve(ctx.ID().getText());
+                return symbolTable.resolve(name);
             } catch (RuntimeException e) {
                 System.err.println(e.getMessage());
                 return null;
@@ -215,45 +271,29 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         return null;
     }
 
-    // --- MÉTODOS RESTANTES (Sem mudanças) ---
-
     @Override
-    public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
-        String varType = ctx.type().getText(); // Agora pode ser 'structPonto' ou 'unionValor'
+    public Object visitArrayAccess(CSubsetParser.ArrayAccessContext ctx) {
         String varName = ctx.ID().getText();
-        System.out.println("SEMÂNTICA: Declarando variável '" + varName + "' do tipo '" + varType + "'");
         try {
-            // 'add' agora trata a criação de StructInstance e UnionInstance
-            symbolTable.add(varName, varType);
-
-            if (ctx.LBRACKET() != null) {
-                int size = Integer.parseInt(ctx.INT().getText());
-                Object[] array = new Object[size];
-                System.out.println("INTERPRETADOR: Alocando array '" + varName + "' com tamanho " + size);
-                symbolTable.assign(varName, array);
-            } else if (ctx.ASSIGN() != null) {
-                Object value = visit(ctx.expression());
-                System.out.println("INTERPRETADOR: Inicializando '" + varName + "' com " + value);
-                symbolTable.assign(varName, value);
+            Object arrayObj = symbolTable.resolve(varName);
+            if (!(arrayObj instanceof Object[])) {
+                throw new RuntimeException("Erro: Tentando indexar uma variável ('" + varName + "') que não é um array.");
             }
+            Object[] array = (Object[]) arrayObj;
+            Object indexObj = visit(ctx.expression());
+            if (!(indexObj instanceof Integer)) {
+                throw new RuntimeException("Erro: Índice do array deve ser um inteiro.");
+            }
+            int index = (Integer) indexObj;
+            System.out.println("INTERPRETADOR: Lendo valor de '" + varName + "[" + index + "]'");
+            Object value = array[index];
+            if (value == null) {
+                throw new RuntimeException("Erro: Lendo índice de array não inicializado.");
+            }
+            return value;
         } catch (RuntimeException e) {
             System.err.println(e.getMessage());
-        }
-        return null;
-    }
-
-    @Override
-    public Object visitUnaryExpr(CSubsetParser.UnaryExprContext ctx) {
-        Object value = visit(ctx.relExpr());
-        int notCount = ctx.NOT().size();
-        if (notCount == 0) {
-            return value;
-        }
-        boolean boolValue = forceBoolean(value);
-        if (notCount % 2 != 0) {
-            return !boolValue;
-        } else {
-            return boolValue;
+            return null;
         }
     }
     @Override
@@ -282,25 +322,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             }
         }
         return false;
-    }
-    @Override
-    public Object visitLogicalAndExpr(CSubsetParser.LogicalAndExprContext ctx) {
-        if (ctx.unaryExpr().size() < 2) {
-            return visit(ctx.unaryExpr(0));
-        }
-        Object left = visit(ctx.unaryExpr(0));
-        boolean leftBool = forceBoolean(left);
-        if (!leftBool) {
-            return false;
-        }
-        for (int i = 1; i < ctx.unaryExpr().size(); i++) {
-            Object right = visit(ctx.unaryExpr(i));
-            boolean rightBool = forceBoolean(right);
-            if (!rightBool) {
-                return false;
-            }
-        }
-        return true;
     }
     @Override
     public Object visitRelExpr(CSubsetParser.RelExprContext ctx) {
@@ -367,36 +388,29 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         return left;
     }
     @Override
-    public Object visitMultExpr(CSubsetParser.MultExprContext ctx) {
-        Object left = visit(ctx.primaryExpr(0));
-        for (int i = 1; i < ctx.primaryExpr().size(); i++) {
-            Object right = visit(ctx.primaryExpr(i));
-            String op = ctx.getChild(i * 2 - 1).getText();
-            Number leftNum = promoteToNumber(left);
-            Number rightNum = promoteToNumber(right);
-            if (leftNum instanceof Double || rightNum instanceof Double) {
-                double leftVal = leftNum.doubleValue();
-                double rightVal = rightNum.doubleValue();
-                switch (op) {
-                    case "*": left = leftVal * rightVal; break;
-                    case "/":
-                        if (rightVal == 0.0) throw new RuntimeException("Erro: Divisão por zero.");
-                        left = leftVal / rightVal;
-                        break;
-                }
-            } else {
-                int leftVal = leftNum.intValue();
-                int rightVal = rightNum.intValue();
-                switch (op) {
-                    case "*": left = leftVal * rightVal; break;
-                    case "/":
-                        if (rightVal == 0) throw new RuntimeException("Erro: Divisão por zero.");
-                        left = leftVal / rightVal;
-                        break;
-                }
-            }
+    public Object visitProgram(CSubsetParser.ProgramContext ctx) {
+        for (CSubsetParser.DefineDirectiveContext defineCtx : ctx.defineDirective()) {
+            visit(defineCtx);
         }
-        return left;
+        for (CSubsetParser.StructDefinitionContext structCtx : ctx.structDefinition()) {
+            visit(structCtx);
+        }
+        for (CSubsetParser.UnionDefinitionContext unionCtx : ctx.unionDefinition()) {
+            visit(unionCtx);
+        }
+        for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
+            visit(funcCtx);
+        }
+        FunctionSymbol mainFunction = symbolTable.resolveFunction("main");
+        if (mainFunction == null) {
+            throw new RuntimeException("Erro: Função 'main' não encontrada.");
+        }
+        try {
+            executeFunction(mainFunction, new ArrayList<>());
+        } catch (ReturnException re) {
+            // Ignorar
+        }
+        return null;
     }
     @Override
     public Object visitFunctionDeclaration(CSubsetParser.FunctionDeclarationContext ctx) {

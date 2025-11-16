@@ -4,7 +4,7 @@ grammar CSubset;
 package br.uenp.compiladores;
 }
 
-program: (structDefinition | unionDefinition | functionDeclaration)+;
+program: (defineDirective | structDefinition | unionDefinition | functionDeclaration)+;
 
 functionDeclaration:
     type ID LPAREN paramList? RPAREN block
@@ -16,22 +16,18 @@ param:
     type ID
     ;
 
+defineDirective:
+    HASH DEFINE ID (INT | FLOAT)
+    ;
 unionDefinition:
     UNION ID LBRACE structMember+ RBRACE SEMI
     ;
-
 structDefinition:
     STRUCT ID LBRACE structMember+ RBRACE SEMI
     ;
-
-//
-// --- ESTA ERA A REGRA EM FALTA ---
-//
 structMember:
     type ID SEMI
     ;
-// --- FIM DA CORREÇÃO ---
-
 memberAccess:
     ID DOT ID
     ;
@@ -94,27 +90,47 @@ simpleDeclaration:
     ;
 assignment: simpleAssignment SEMI;
 simpleAssignment:
-    (ID | arrayAccess | memberAccess) ASSIGN expression
+    lvalue ASSIGN expression
     ;
+lvalue:
+    ID
+    | arrayAccess
+    | memberAccess
+    | (STAR unaryExpr)
+    ;
+
+//
+// --- CADEIA DE EXPRESSÃO CORRIGIDA ---
+//
 expression: logicalOrExpr;
+
 logicalOrExpr:
     logicalAndExpr (OR logicalAndExpr)*
     ;
+
 logicalAndExpr:
-    unaryExpr (AND unaryExpr)*
+    relExpr (AND relExpr)* // CORRIGIDO: Deve chamar 'relExpr'
     ;
-unaryExpr:
-    (NOT)* relExpr
-    ;
+
 relExpr:
     addExpr ( (GT | LT | EQ | NEQ) addExpr )*
     ;
+
 addExpr:
     multExpr ( (PLUS | MINUS) multExpr )*
     ;
+
 multExpr:
-    primaryExpr ( (MULT | DIV) primaryExpr )*
+    unaryExpr ( (STAR | DIV) unaryExpr )* // CORRIGIDO: Deve chamar 'unaryExpr'
     ;
+
+unaryExpr: // CORRIGIDO: 'primaryExpr' é a última opção
+    (NOT | AMPERSAND) unaryExpr
+    | STAR unaryExpr
+    | primaryExpr
+    ;
+// --- FIM DA CORREÇÃO ---
+
 primaryExpr:
       INT
     | FLOAT
@@ -136,7 +152,7 @@ argList:
     ;
 
 type:
-    (T_INT | T_FLOAT | T_CHAR)
+    (T_INT | T_FLOAT | T_CHAR) (STAR)?
     | structType
     | unionType
     ;
@@ -164,8 +180,8 @@ RBRACKET: ']';
 DOT: '.';
 PLUS: '+';
 MINUS: '-';
-MULT: '*';
 DIV: '/';
+STAR: '*';
 IF: 'if';
 ELSE: 'else';
 WHILE: 'while';
@@ -188,6 +204,8 @@ SCANF: 'scanf';
 COMMA: ',';
 AMPERSAND: '&';
 COLON: ':';
+HASH: '#';
+DEFINE: 'define';
 
 ID: [a-zA-Z_] [a-zA-Z_0-9]*;
 INT: [0-9]+;

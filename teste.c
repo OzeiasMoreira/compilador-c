@@ -1,24 +1,18 @@
 // Em teste.c
-
-// 1. Definição da Union
-union Valor {
-    int i;
-    float f;
-};
-
 int main() {
-    // 2. Instanciação
-    union Valor v;
+    int x = 10;
+    int y = 0;
+    int *ptr; // Declara o ponteiro
 
-    // 3. Escreve um inteiro
-    v.i = 10;
-    printf("Valor como inteiro: %d\n", v.i);
+    printf("x inicial = %d\n", x); // Deve ser 10
 
-    // 4. Escreve um float (sobrescreve o inteiro)
-    v.f = 2.5;
+    ptr = &x; // Ponteiro agora guarda o "endereço" de x
 
-    printf("Valor como float: %f\n", v.f);
+    *ptr = 20; // Modifica o valor de x ATRAVÉS do ponteiro
 
-    // 5. Lê o inteiro (deve falhar no nosso interpretador)
-    printf("Valor como inteiro (lido apos float): %d\n", v.i);
+    printf("x apos *ptr = 20: %d\n", x); // Deve ser 20
+
+    y = *ptr + 5; // Lê o valor de x (20) e soma 5
+
+    printf("y vale: %d\n", y); // Deve ser 25
 }
