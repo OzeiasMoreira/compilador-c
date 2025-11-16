@@ -23,7 +23,59 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         throw new RuntimeException("Erro de tipo: não é possível avaliar a expressão como booleana.");
     }
 
-    // --- LÓGICA DO PRINTF (CORRIGIDA) ---
+    //
+    // --- 'visitRelExpr' ATUALIZADO ---
+    //
+    @Override
+    public Object visitRelExpr(CSubsetParser.RelExprContext ctx) {
+        Object left = visit(ctx.addExpr(0));
+        if (ctx.addExpr().size() < 2) {
+            return left;
+        }
+        Object right = visit(ctx.addExpr(1));
+        String op = ctx.getChild(1).getText();
+
+        // Caso 1: Comparando Números
+        if (left instanceof Number && right instanceof Number) {
+            Number leftNum = (Number) left;
+            Number rightNum = (Number) right;
+            double leftVal = leftNum.doubleValue();
+            double rightVal = rightNum.doubleValue();
+
+            switch (op) {
+                case ">": return leftVal > rightVal;
+                case ">=": return leftVal >= rightVal; // <-- ADICIONADO
+                case "<": return leftVal < rightVal;
+                case "<=": return leftVal <= rightVal; // <-- ADICIONADO
+                case "==": return leftVal == rightVal;
+                case "!=": return leftVal != rightVal;
+                default:
+                    throw new RuntimeException("Operador relacional desconhecido para números: " + op);
+            }
+        }
+        // Caso 2: Comparando Caracteres
+        else if (left instanceof Character && right instanceof Character) {
+            Character leftChar = (Character) left;
+            Character rightChar = (Character) right;
+
+            switch (op) {
+                case ">": return leftChar > rightChar;
+                case ">=": return leftChar >= rightChar; // <-- ADICIONADO
+                case "<": return leftChar < rightChar;
+                case "<=": return leftChar <= rightChar; // <-- ADICIONADO
+                case "==": return leftChar == rightChar;
+                case "!=": return leftChar != rightChar;
+                default:
+                    throw new RuntimeException("Operador relacional desconhecido para caracteres: " + op);
+            }
+        }
+        else {
+            throw new RuntimeException("Erro de tipo: não é possível comparar " + left.getClass().getName() + " com " + right.getClass().getName());
+        }
+    }
+
+    // --- MÉTODOS RESTANTES (Sem mudanças) ---
+    // (Apenas colados para garantir que o ficheiro está completo)
 
     @Override
     public Object visitPrintfStatement(CSubsetParser.PrintfStatementContext ctx) {
@@ -45,35 +97,24 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         }
 
         formatString = formatString.replace("\\n", "\n");
-
-        // --- CORREÇÃO DO BUG DE IMPRESSÃO ---
         System.out.print(formatString);
-        System.out.flush(); // Força a impressão para o console AGORA.
-        // --- FIM DA CORREÇÃO ---
-
+        System.out.flush();
         return null;
     }
 
-    // --- LÓGICA DE EXPRESSÃO (Corrigida) ---
-
     @Override
     public Object visitLogicalAndExpr(CSubsetParser.LogicalAndExprContext ctx) {
-        // CORRIGIDO: Deve chamar relExpr
         if (ctx.relExpr().size() < 2) {
             return visit(ctx.relExpr(0));
         }
-
         Object left = visit(ctx.relExpr(0));
         boolean leftBool = forceBoolean(left);
-
         if (!leftBool) {
             return false;
         }
-
         for (int i = 1; i < ctx.relExpr().size(); i++) {
             Object right = visit(ctx.relExpr(i));
             boolean rightBool = forceBoolean(right);
-
             if (!rightBool) {
                 return false;
             }
@@ -83,15 +124,12 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
 
     @Override
     public Object visitMultExpr(CSubsetParser.MultExprContext ctx) {
-        // CORRIGIDO: Deve chamar unaryExpr
         Object left = visit(ctx.unaryExpr(0));
         for (int i = 1; i < ctx.unaryExpr().size(); i++) {
             Object right = visit(ctx.unaryExpr(i));
             String op = ctx.getChild(i * 2 - 1).getText();
-
             Number leftNum = promoteToNumber(left);
             Number rightNum = promoteToNumber(right);
-
             if (leftNum instanceof Double || rightNum instanceof Double) {
                 double leftVal = leftNum.doubleValue();
                 double rightVal = rightNum.doubleValue();
@@ -117,13 +155,10 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         return left;
     }
 
-    // --- MÉTODOS DE PONTEIRO (Corrigidos) ---
-
     @Override
     public Object visitSimpleAssignment(CSubsetParser.SimpleAssignmentContext ctx) {
         Object rhsValue = visit(ctx.expression());
         CSubsetParser.LvalueContext lvalue = ctx.lvalue();
-
         try {
             if (lvalue.ID() != null) {
                 String varName = lvalue.ID().getText();
@@ -162,14 +197,11 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 }
             }
             else if (lvalue.unaryExpr() != null) {
-                // 'visit(lvalue.unaryExpr())' vai lidar com o '*'
                 Object resolvedName = visit(lvalue.unaryExpr());
-
                 if (!(resolvedName instanceof String)) {
                     throw new RuntimeException("Erro: Tentativa de desreferência (escrita) em algo que não é um ponteiro.");
                 }
                 String varName = (String) resolvedName;
-
                 System.out.println("INTERPRETADOR: Atribuindo (via ponteiro) " + rhsValue + " para '" + varName + "'");
                 symbolTable.assign(varName, rhsValue);
             }
@@ -187,7 +219,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             return !boolValue;
         }
         else if (ctx.AMPERSAND() != null) {
-            // Retorna o NOME da variável como o "endereço"
             String varName = ctx.unaryExpr().getText();
             System.out.println("INTERPRETADOR: Obtendo endereço de '" + varName + "'");
             return varName;
@@ -205,9 +236,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             return visit(ctx.primaryExpr());
         }
     }
-
-    // --- MÉTODOS RESTANTES (Sem mudanças) ---
-    // (Apenas colados para garantir que o ficheiro está completo)
 
     @Override
     public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
@@ -322,44 +350,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             }
         }
         return false;
-    }
-    @Override
-    public Object visitRelExpr(CSubsetParser.RelExprContext ctx) {
-        Object left = visit(ctx.addExpr(0));
-        if (ctx.addExpr().size() < 2) {
-            return left;
-        }
-        Object right = visit(ctx.addExpr(1));
-        String op = ctx.getChild(1).getText();
-        if (left instanceof Number && right instanceof Number) {
-            Number leftNum = (Number) left;
-            Number rightNum = (Number) right;
-            double leftVal = leftNum.doubleValue();
-            double rightVal = rightNum.doubleValue();
-            switch (op) {
-                case ">": return leftVal > rightVal;
-                case "<": return leftVal < rightVal;
-                case "==": return leftVal == rightVal;
-                case "!=": return leftVal != rightVal;
-                default:
-                    throw new RuntimeException("Operador relacional desconhecido para números: " + op);
-            }
-        }
-        else if (left instanceof Character && right instanceof Character) {
-            Character leftChar = (Character) left;
-            Character rightChar = (Character) right;
-            switch (op) {
-                case ">": return leftChar > rightChar;
-                case "<": return leftChar < rightChar;
-                case "==": return leftChar == rightChar;
-                case "!=": return leftChar != rightChar;
-                default:
-                    throw new RuntimeException("Operador relacional desconhecido para caracteres: " + op);
-            }
-        }
-        else {
-            throw new RuntimeException("Erro de tipo: não é possível comparar " + left.getClass().getName() + " com " + right.getClass().getName());
-        }
     }
     @Override
     public Object visitAddExpr(CSubsetParser.AddExprContext ctx) {

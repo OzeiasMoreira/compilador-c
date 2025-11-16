@@ -98,39 +98,33 @@ lvalue:
     | memberAccess
     | (STAR unaryExpr)
     ;
-
-//
-// --- CADEIA DE EXPRESSÃO CORRIGIDA ---
-//
 expression: logicalOrExpr;
-
 logicalOrExpr:
     logicalAndExpr (OR logicalAndExpr)*
     ;
-
 logicalAndExpr:
-    relExpr (AND relExpr)* // CORRIGIDO: Deve chamar 'relExpr'
+    relExpr (AND relExpr)*
     ;
 
+//
+// --- REGRA 'relExpr' ATUALIZADA ---
+//
 relExpr:
-    addExpr ( (GT | LT | EQ | NEQ) addExpr )*
+    addExpr ( (GT | GTE | LT | LTE | EQ | NEQ) addExpr )*
     ;
+// --- FIM DA ATUALIZAÇÃO ---
 
 addExpr:
     multExpr ( (PLUS | MINUS) multExpr )*
     ;
-
 multExpr:
-    unaryExpr ( (STAR | DIV) unaryExpr )* // CORRIGIDO: Deve chamar 'unaryExpr'
+    unaryExpr ( (STAR | DIV) unaryExpr )*
     ;
-
-unaryExpr: // CORRIGIDO: 'primaryExpr' é a última opção
+unaryExpr:
     (NOT | AMPERSAND) unaryExpr
     | STAR unaryExpr
     | primaryExpr
     ;
-// --- FIM DA CORREÇÃO ---
-
 primaryExpr:
       INT
     | FLOAT
@@ -195,7 +189,9 @@ RETURN: 'return';
 EQ: '==';
 NEQ: '!=';
 GT: '>';
+GTE: '>='; // <-- ADICIONADO
 LT: '<';
+LTE: '<='; // <-- ADICIONADO
 AND: '&&';
 OR: '||';
 NOT: '!';
