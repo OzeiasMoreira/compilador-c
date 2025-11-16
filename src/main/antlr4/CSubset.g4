@@ -4,19 +4,36 @@ grammar CSubset;
 package br.uenp.compiladores;
 }
 
-program: functionDeclaration+;
+// Definições de topo agora podem ser structs ou funções
+program: (structDefinition | functionDeclaration)+;
 
 functionDeclaration:
     type ID LPAREN paramList? RPAREN block
     ;
-
 paramList:
     param (COMMA param)*
     ;
-
 param:
     type ID
     ;
+
+//
+// --- NOVAS REGRAS PARA STRUCT ---
+//
+// Define uma struct (ex: struct Ponto { int x; };)
+structDefinition:
+    STRUCT ID LBRACE structMember+ RBRACE SEMI
+    ;
+
+structMember:
+    type ID SEMI
+    ;
+
+// Acesso a membro (ex: p1.x)
+memberAccess:
+    ID DOT ID
+    ;
+// --- FIM DAS NOVAS REGRAS ---
 
 statement:
     declaration
@@ -32,7 +49,7 @@ statement:
     | returnStatement
     ;
 
-// ... (regras 'return', 'if', 'printf', 'scanf', 'while', 'do-while', 'switch' sem mudanças) ...
+// ... (regras 'return' até 'for' sem mudanças) ...
 returnStatement:
     RETURN expression? SEMI
     ;
@@ -71,22 +88,17 @@ forInit:
     | simpleAssignment
     ;
 block: LBRACE statement* RBRACE;
+
+// Declaração de variável (sem mudanças, já suporta 'type ID')
 declaration: simpleDeclaration SEMI;
-
-//
-// --- ATUALIZAÇÕES PARA O ARRAY ---
-//
-
-// Declaração pode ser 'int x', 'int x = 10', ou 'int arr[5]'
-// Mas não 'int arr[5] = ...' (por enquanto)
 simpleDeclaration:
     type ID ( (LBRACKET INT RBRACKET) | (ASSIGN expression) )?
     ;
 
-// Atribuição pode ser 'x = 10' ou 'arr[0] = 10'
+// Atribuição agora suporta p1.x = 10
 assignment: simpleAssignment SEMI;
 simpleAssignment:
-    (ID | arrayAccess) ASSIGN expression // <-- ATUALIZADO
+    (ID | arrayAccess | memberAccess) ASSIGN expression // <-- ATUALIZADO
     ;
 
 expression: logicalOrExpr;
@@ -94,7 +106,10 @@ logicalOrExpr:
     logicalAndExpr (OR logicalAndExpr)*
     ;
 logicalAndExpr:
-    relExpr (AND relExpr)*
+    unaryExpr (AND unaryExpr)*
+    ;
+unaryExpr:
+    (NOT)* relExpr
     ;
 relExpr:
     addExpr ( (GT | LT | EQ | NEQ) addExpr )*
@@ -106,52 +121,60 @@ multExpr:
     primaryExpr ( (MULT | DIV) primaryExpr )*
     ;
 
-// 'primaryExpr' pode ser ler 'x' ou ler 'arr[0]'
+// Leitura de p1.x adicionada
 primaryExpr:
       INT
     | FLOAT
     | CHAR_LITERAL
     | ID
     | functionCall
-    | arrayAccess // <-- ADICIONADO
+    | arrayAccess
+    | memberAccess // <-- ADICIONADO
     | LPAREN expression RPAREN
     ;
 
 functionCall:
     ID LPAREN argList? RPAREN
     ;
-
-// Nova regra para acesso a array (ex: arr[i])
 arrayAccess:
     ID LBRACKET expression RBRACKET
     ;
-
 argList:
     expression (COMMA expression)*
     ;
-// --- FIM DAS ATUALIZAÇÕES DO ARRAY ---
 
-type: T_INT | T_FLOAT | T_CHAR;
+//
+// --- REGRA 'type' ATUALIZADA ---
+//
+type:
+    (T_INT | T_FLOAT | T_CHAR) // Tipos primitivos
+    | structType               // Ou um tipo struct
+    ;
 
+structType: // ex: struct Ponto
+    STRUCT ID
+    ;
+
+// --- TOKENS ---
 T_INT: 'int';
 T_FLOAT: 'float';
 T_CHAR: 'char';
+STRUCT: 'struct'; // <-- ADICIONADO
 ASSIGN: '=';
 LPAREN: '(';
 RPAREN: ')';
 LBRACE: '{';
 RBRACE: '}';
 SEMI: ';';
-LBRACKET: '['; // <-- ADICIONADO
-RBRACKET: ']'; // <-- ADICIONADO
+LBRACKET: '[';
+RBRACKET: ']';
+DOT: '.'; // <-- ADICIONADO
 
-// Tokens Aritméticos
+// ... (restante dos tokens sem mudanças) ...
 PLUS: '+';
 MINUS: '-';
 MULT: '*';
 DIV: '/';
-
-// Tokens de Controlo e Relacionais
 IF: 'if';
 ELSE: 'else';
 WHILE: 'while';
@@ -169,8 +192,6 @@ LT: '<';
 AND: '&&';
 OR: '||';
 NOT: '!';
-
-// Tokens do Printf e Scanf
 PRINTF: 'printf';
 SCANF: 'scanf';
 COMMA: ',';

@@ -1,5 +1,6 @@
 package br.uenp.compiladores;
 
+// --- IMPORTS CORRIGIDOS ---
 import java.util.Scanner;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +24,75 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         throw new RuntimeException("Erro de tipo: não é possível avaliar a expressão como booleana.");
     }
 
-    // --- LÓGICA DE DECLARAÇÃO E ATRIBUIÇÃO (Atualizada para Arrays) ---
+    // --- PONTO DE ENTRADA (Atualizado para Structs) ---
+
+    @Override
+    public Object visitProgram(CSubsetParser.ProgramContext ctx) {
+        // 1º Passo: Registar todas as definições (structs e funções)
+
+        // Registar Structs (NOVO)
+        for (CSubsetParser.StructDefinitionContext structCtx : ctx.structDefinition()) {
+            visit(structCtx);
+        }
+
+        // Registar Funções
+        for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
+            visit(funcCtx);
+        }
+
+        // 2º Passo: Encontrar e executar 'main'
+        FunctionSymbol mainFunction = symbolTable.resolveFunction("main");
+        if (mainFunction == null) {
+            throw new RuntimeException("Erro: Função 'main' não encontrada.");
+        }
+        try {
+            executeFunction(mainFunction, new ArrayList<>());
+        } catch (ReturnException re) {
+            // Ignorar
+        }
+        return null;
+    }
+
+    // --- NOVOS MÉTODOS (Structs) ---
+
+    @Override
+    public Object visitStructDefinition(CSubsetParser.StructDefinitionContext ctx) {
+        String structName = ctx.ID().getText();
+        System.out.println("SEMÂNTICA: Registando struct '" + structName + "'");
+
+        StructDefinition def = new StructDefinition();
+        for (CSubsetParser.StructMemberContext memberCtx : ctx.structMember()) {
+            String type = memberCtx.type().getText();
+            String name = memberCtx.ID().getText();
+            def.addMember(name, type);
+        }
+
+        symbolTable.addStructDefinition(structName, def);
+        return null;
+    }
+
+    @Override
+    public Object visitMemberAccess(CSubsetParser.MemberAccessContext ctx) {
+        String instanceName = ctx.ID(0).getText(); // O 'p1'
+        String memberName = ctx.ID(1).getText(); // O 'x'
+
+        try {
+            Object obj = symbolTable.resolve(instanceName);
+            if (!(obj instanceof StructInstance)) {
+                throw new RuntimeException("Erro: Tentando aceder a membro '" + memberName + "' de algo que não é uma struct ('" + instanceName + "').");
+            }
+            StructInstance instance = (StructInstance) obj;
+
+            System.out.println("INTERPRETADOR: Lendo " + instanceName + "." + memberName);
+            return instance.read(memberName);
+
+        } catch (RuntimeException e) {
+            System.err.println(e.getMessage());
+            return null;
+        }
+    }
+
+    // --- MÉTODOS ATUALIZADOS (Structs) ---
 
     @Override
     public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
@@ -32,28 +101,19 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         System.out.println("SEMÂNTICA: Declarando variável '" + varName + "' do tipo '" + varType + "'");
 
         try {
-            // 1. Adiciona a variável à tabela de símbolos
             symbolTable.add(varName, varType);
 
-            // 2. Verifica se é uma declaração de array (ex: int arr[5])
             if (ctx.LBRACKET() != null) {
-                if (ctx.ASSIGN() != null) {
-                    throw new RuntimeException("Erro: Inicialização de array na declaração não é suportada.");
-                }
-
-                // Aloca o array
                 int size = Integer.parseInt(ctx.INT().getText());
                 Object[] array = new Object[size];
                 System.out.println("INTERPRETADOR: Alocando array '" + varName + "' com tamanho " + size);
-                symbolTable.assign(varName, array); // Guarda o array Java no 'value' do Símbolo
+                symbolTable.assign(varName, array);
 
-                // 3. Verifica se é uma inicialização de escalar (ex: int x = 10)
             } else if (ctx.ASSIGN() != null) {
                 Object value = visit(ctx.expression());
                 System.out.println("INTERPRETADOR: Inicializando '" + varName + "' com " + value);
                 symbolTable.assign(varName, value);
             }
-            // 4. Se for só 'int x;', não faz nada (valor fica 'null')
 
         } catch (RuntimeException e) {
             System.err.println(e.getMessage());
@@ -63,10 +123,8 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
 
     @Override
     public Object visitSimpleAssignment(CSubsetParser.SimpleAssignmentContext ctx) {
-        // Visita a expressão à direita (o valor a ser atribuído)
         Object value = visit(ctx.expression());
 
-        // Verifica se é uma atribuição a um escalar (ex: x = 10)
         if (ctx.ID() != null) {
             String varName = ctx.ID().getText();
             System.out.println("INTERPRETADOR: Atribuindo " + value + " para '" + varName + "'");
@@ -76,72 +134,44 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 System.err.println(e.getMessage());
             }
         }
-        // Verifica se é uma atribuição a um array (ex: arr[0] = 10)
         else if (ctx.arrayAccess() != null) {
             String varName = ctx.arrayAccess().ID().getText();
-
             try {
-                // Pega o array da memória
                 Object arrayObj = symbolTable.resolve(varName);
                 if (!(arrayObj instanceof Object[])) {
                     throw new RuntimeException("Erro: Tentando indexar uma variável ('" + varName + "') que não é um array.");
                 }
                 Object[] array = (Object[]) arrayObj;
-
-                // Calcula o índice
                 Object indexObj = visit(ctx.arrayAccess().expression());
                 if (!(indexObj instanceof Integer)) {
                     throw new RuntimeException("Erro: Índice do array deve ser um inteiro.");
                 }
                 int index = (Integer) indexObj;
-
                 System.out.println("INTERPRETADOR: Atribuindo " + value + " para '" + varName + "[" + index + "]'");
-
-                // Atribui o valor ao índice
                 array[index] = value;
+            } catch (RuntimeException e) {
+                System.err.println(e.getMessage());
+            }
+        }
+        else if (ctx.memberAccess() != null) {
+            String instanceName = ctx.memberAccess().ID(0).getText();
+            String memberName = ctx.memberAccess().ID(1).getText();
+
+            try {
+                Object obj = symbolTable.resolve(instanceName);
+                if (!(obj instanceof StructInstance)) {
+                    throw new RuntimeException("Erro: Tentando aceder a membro '" + memberName + "' de algo que não é uma struct.");
+                }
+                StructInstance instance = (StructInstance) obj;
+
+                System.out.println("INTERPRETADOR: Atribuindo " + value + " para " + instanceName + "." + memberName);
+                instance.write(memberName, value);
 
             } catch (RuntimeException e) {
                 System.err.println(e.getMessage());
             }
         }
         return null;
-    }
-
-    // --- LÓGICA DE EXPRESSÕES (Atualizada) ---
-
-    // NOVO MÉTODO: Chamado quando lemos um valor (ex: x = arr[0])
-    @Override
-    public Object visitArrayAccess(CSubsetParser.ArrayAccessContext ctx) {
-        String varName = ctx.ID().getText();
-
-        try {
-            // Pega o array da memória
-            Object arrayObj = symbolTable.resolve(varName);
-            if (!(arrayObj instanceof Object[])) {
-                throw new RuntimeException("Erro: Tentando indexar uma variável ('" + varName + "') que não é um array.");
-            }
-            Object[] array = (Object[]) arrayObj;
-
-            // Calcula o índice
-            Object indexObj = visit(ctx.expression());
-            if (!(indexObj instanceof Integer)) {
-                throw new RuntimeException("Erro: Índice do array deve ser um inteiro.");
-            }
-            int index = (Integer) indexObj;
-
-            System.out.println("INTERPRETADOR: Lendo valor de '" + varName + "[" + index + "]'");
-
-            // Retorna o valor do índice
-            Object value = array[index];
-            if (value == null) {
-                throw new RuntimeException("Erro: Lendo índice de array não inicializado.");
-            }
-            return value;
-
-        } catch (RuntimeException e) {
-            System.err.println(e.getMessage());
-            return null; // Retorna null em caso de erro
-        }
     }
 
     @Override
@@ -156,7 +186,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             String text = ctx.CHAR_LITERAL().getText();
             return text.charAt(1);
         }
-        if (ctx.ID() != null) { // É uma variável escalar
+        if (ctx.ID() != null) {
             try {
                 return symbolTable.resolve(ctx.ID().getText());
             } catch (RuntimeException e) {
@@ -164,11 +194,14 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 return null;
             }
         }
-        if (ctx.functionCall() != null) { // É uma chamada de função
+        if (ctx.functionCall() != null) {
             return visit(ctx.functionCall());
         }
-        if (ctx.arrayAccess() != null) { // É uma leitura de array
+        if (ctx.arrayAccess() != null) {
             return visit(ctx.arrayAccess());
+        }
+        if (ctx.memberAccess() != null) {
+            return visit(ctx.memberAccess());
         }
         if (ctx.expression() != null) {
             return visit(ctx.expression());
@@ -176,7 +209,22 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         return null;
     }
 
-    // --- MÉTODOS RESTANTES (Sem o visitUnaryExpr) ---
+    // --- MÉTODOS RESTANTES (Sem mudanças) ---
+
+    @Override
+    public Object visitUnaryExpr(CSubsetParser.UnaryExprContext ctx) {
+        Object value = visit(ctx.relExpr());
+        int notCount = ctx.NOT().size();
+        if (notCount == 0) {
+            return value;
+        }
+        boolean boolValue = forceBoolean(value);
+        if (notCount % 2 != 0) {
+            return !boolValue;
+        } else {
+            return boolValue;
+        }
+    }
 
     @Override
     public Object visitDeclaration(CSubsetParser.DeclarationContext ctx) {
@@ -207,16 +255,16 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     }
     @Override
     public Object visitLogicalAndExpr(CSubsetParser.LogicalAndExprContext ctx) {
-        if (ctx.relExpr().size() < 2) {
-            return visit(ctx.relExpr(0));
+        if (ctx.unaryExpr().size() < 2) {
+            return visit(ctx.unaryExpr(0));
         }
-        Object left = visit(ctx.relExpr(0));
+        Object left = visit(ctx.unaryExpr(0));
         boolean leftBool = forceBoolean(left);
         if (!leftBool) {
             return false;
         }
-        for (int i = 1; i < ctx.relExpr().size(); i++) {
-            Object right = visit(ctx.relExpr(i));
+        for (int i = 1; i < ctx.unaryExpr().size(); i++) {
+            Object right = visit(ctx.unaryExpr(i));
             boolean rightBool = forceBoolean(right);
             if (!rightBool) {
                 return false;
@@ -224,9 +272,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         }
         return true;
     }
-
-    // O MÉTODO visitUnaryExpr FOI REMOVIDO DESTA VERSÃO
-
     @Override
     public Object visitRelExpr(CSubsetParser.RelExprContext ctx) {
         Object left = visit(ctx.addExpr(0));
@@ -322,22 +367,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             }
         }
         return left;
-    }
-    @Override
-    public Object visitProgram(CSubsetParser.ProgramContext ctx) {
-        for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
-            visit(funcCtx);
-        }
-        FunctionSymbol mainFunction = symbolTable.resolveFunction("main");
-        if (mainFunction == null) {
-            throw new RuntimeException("Erro: Função 'main' não encontrada.");
-        }
-        try {
-            executeFunction(mainFunction, new ArrayList<>());
-        } catch (ReturnException re) {
-            // Ignorar valor de retorno do main
-        }
-        return null;
     }
     @Override
     public Object visitFunctionDeclaration(CSubsetParser.FunctionDeclarationContext ctx) {

@@ -1,11 +1,15 @@
 // Em teste.c
+struct Ponto {
+    int x;
+    int y;
+};
+
 int main() {
-    int meuArray[5];
+    struct Ponto p1;
 
-    meuArray[0] = 100;
-    meuArray[1] = 200;
+    p1.x = 10;
+    p1.y = 20;
 
-    int valor = meuArray[1];
-
-    printf("Valor lido do array: %d\n", valor); // Deve ser 200
+    printf("O valor de p1.x eh: %d\n", p1.x);
+    printf("O valor de p1.y eh: %d\n", p1.y);
 }
