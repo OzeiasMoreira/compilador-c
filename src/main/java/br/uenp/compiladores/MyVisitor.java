@@ -23,157 +23,126 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         throw new RuntimeException("Erro de tipo: não é possível avaliar a expressão como booleana.");
     }
 
-    // --- LÓGICA DO PRINTF (Atualizada) ---
+    // --- LÓGICA DE DECLARAÇÃO E ATRIBUIÇÃO (Atualizada para Arrays) ---
 
     @Override
-    public Object visitPrintfStatement(CSubsetParser.PrintfStatementContext ctx) {
-        String formatString = ctx.STRING_LITERAL().getText();
-        formatString = formatString.substring(1, formatString.length() - 1);
+    public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
+        String varType = ctx.type().getText();
+        String varName = ctx.ID().getText();
+        System.out.println("SEMÂNTICA: Declarando variável '" + varName + "' do tipo '" + varType + "'");
 
-        // --- LÓGICA ATUALIZADA PARA MÚLTIPLOS ARGUMENTOS ---
+        try {
+            // 1. Adiciona a variável à tabela de símbolos
+            symbolTable.add(varName, varType);
 
-        // Verifica se a lista de argumentos existe
-        if (ctx.argList() != null) {
-
-            // Itera por todas as expressões nos argumentos
-            for (CSubsetParser.ExpressionContext exprCtx : ctx.argList().expression()) {
-                // Avalia cada argumento
-                Object value = visit(exprCtx);
-
-                // Substitui o *primeiro* formatador que encontrar
-                if (formatString.contains("%d") && value instanceof Integer) {
-                    formatString = formatString.replaceFirst("%d", value.toString());
-                } else if (formatString.contains("%f") && (value instanceof Double || value instanceof Integer)) {
-                    formatString = formatString.replaceFirst("%f", value.toString());
-                } else if (formatString.contains("%c") && value instanceof Character) {
-                    formatString = formatString.replaceFirst("%c", value.toString());
+            // 2. Verifica se é uma declaração de array (ex: int arr[5])
+            if (ctx.LBRACKET() != null) {
+                if (ctx.ASSIGN() != null) {
+                    throw new RuntimeException("Erro: Inicialização de array na declaração não é suportada.");
                 }
-                // (Se houver mais argumentos do que formatadores, eles são ignorados)
+
+                // Aloca o array
+                int size = Integer.parseInt(ctx.INT().getText());
+                Object[] array = new Object[size];
+                System.out.println("INTERPRETADOR: Alocando array '" + varName + "' com tamanho " + size);
+                symbolTable.assign(varName, array); // Guarda o array Java no 'value' do Símbolo
+
+                // 3. Verifica se é uma inicialização de escalar (ex: int x = 10)
+            } else if (ctx.ASSIGN() != null) {
+                Object value = visit(ctx.expression());
+                System.out.println("INTERPRETADOR: Inicializando '" + varName + "' com " + value);
+                symbolTable.assign(varName, value);
             }
+            // 4. Se for só 'int x;', não faz nada (valor fica 'null')
+
+        } catch (RuntimeException e) {
+            System.err.println(e.getMessage());
         }
-
-        formatString = formatString.replace("\\n", "\n");
-        System.out.print(formatString);
-
         return null;
     }
 
-    // --- GESTÃO DE FUNÇÕES (Sem mudanças) ---
-
     @Override
-    public Object visitProgram(CSubsetParser.ProgramContext ctx) {
-        for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
-            visit(funcCtx);
+    public Object visitSimpleAssignment(CSubsetParser.SimpleAssignmentContext ctx) {
+        // Visita a expressão à direita (o valor a ser atribuído)
+        Object value = visit(ctx.expression());
+
+        // Verifica se é uma atribuição a um escalar (ex: x = 10)
+        if (ctx.ID() != null) {
+            String varName = ctx.ID().getText();
+            System.out.println("INTERPRETADOR: Atribuindo " + value + " para '" + varName + "'");
+            try {
+                symbolTable.assign(varName, value);
+            } catch (RuntimeException e) {
+                System.err.println(e.getMessage());
+            }
         }
-        FunctionSymbol mainFunction = symbolTable.resolveFunction("main");
-        if (mainFunction == null) {
-            throw new RuntimeException("Erro: Função 'main' não encontrada.");
+        // Verifica se é uma atribuição a um array (ex: arr[0] = 10)
+        else if (ctx.arrayAccess() != null) {
+            String varName = ctx.arrayAccess().ID().getText();
+
+            try {
+                // Pega o array da memória
+                Object arrayObj = symbolTable.resolve(varName);
+                if (!(arrayObj instanceof Object[])) {
+                    throw new RuntimeException("Erro: Tentando indexar uma variável ('" + varName + "') que não é um array.");
+                }
+                Object[] array = (Object[]) arrayObj;
+
+                // Calcula o índice
+                Object indexObj = visit(ctx.arrayAccess().expression());
+                if (!(indexObj instanceof Integer)) {
+                    throw new RuntimeException("Erro: Índice do array deve ser um inteiro.");
+                }
+                int index = (Integer) indexObj;
+
+                System.out.println("INTERPRETADOR: Atribuindo " + value + " para '" + varName + "[" + index + "]'");
+
+                // Atribui o valor ao índice
+                array[index] = value;
+
+            } catch (RuntimeException e) {
+                System.err.println(e.getMessage());
+            }
         }
+        return null;
+    }
+
+    // --- LÓGICA DE EXPRESSÕES (Atualizada) ---
+
+    // NOVO MÉTODO: Chamado quando lemos um valor (ex: x = arr[0])
+    @Override
+    public Object visitArrayAccess(CSubsetParser.ArrayAccessContext ctx) {
+        String varName = ctx.ID().getText();
+
         try {
-            executeFunction(mainFunction, new ArrayList<>());
-        } catch (ReturnException re) {
-            // Ignorar valor de retorno do main por enquanto
-        }
-        return null;
-    }
-
-    @Override
-    public Object visitFunctionDeclaration(CSubsetParser.FunctionDeclarationContext ctx) {
-        String funcType = ctx.type().getText();
-        String funcName = ctx.ID().getText();
-        List<Map.Entry<String, String>> params = new ArrayList<>();
-        if (ctx.paramList() != null) {
-            for (CSubsetParser.ParamContext paramCtx : ctx.paramList().param()) {
-                String paramType = paramCtx.type().getText();
-                String paramName = paramCtx.ID().getText();
-                params.add(Map.entry(paramType, paramName));
+            // Pega o array da memória
+            Object arrayObj = symbolTable.resolve(varName);
+            if (!(arrayObj instanceof Object[])) {
+                throw new RuntimeException("Erro: Tentando indexar uma variável ('" + varName + "') que não é um array.");
             }
-        }
-        FunctionSymbol func = new FunctionSymbol(funcType, params, ctx.block());
-        symbolTable.addFunction(funcName, func);
-        System.out.println("SEMÂNTICA: Registando função '" + funcName + "'");
-        return null;
-    }
+            Object[] array = (Object[]) arrayObj;
 
-    @Override
-    public Object visitFunctionCall(CSubsetParser.FunctionCallContext ctx) {
-        String funcName = ctx.ID().getText();
-        List<Object> args = new ArrayList<>();
-        if (ctx.argList() != null) {
-            for (CSubsetParser.ExpressionContext exprCtx : ctx.argList().expression()) {
-                args.add(visit(exprCtx));
+            // Calcula o índice
+            Object indexObj = visit(ctx.expression());
+            if (!(indexObj instanceof Integer)) {
+                throw new RuntimeException("Erro: Índice do array deve ser um inteiro.");
             }
-        }
-        FunctionSymbol function = symbolTable.resolveFunction(funcName);
-        try {
-            return executeFunction(function, args);
-        } catch (ReturnException re) {
-            return re.getValue();
-        }
-    }
+            int index = (Integer) indexObj;
 
-    private Object executeFunction(FunctionSymbol function, List<Object> args) {
-        if (function.getParameters().size() != args.size()) {
-            throw new RuntimeException("Erro: Número incorreto de argumentos para a função.");
-        }
-        symbolTable.enterScope();
-        for (int i = 0; i < args.size(); i++) {
-            String paramType = function.getParameters().get(i).getKey();
-            String paramName = function.getParameters().get(i).getValue();
-            Object paramValue = args.get(i);
-            symbolTable.add(paramName, paramType);
-            symbolTable.assign(paramName, paramValue);
-        }
-        visit(function.getBody());
-        symbolTable.exitScope();
-        return null;
-    }
+            System.out.println("INTERPRETADOR: Lendo valor de '" + varName + "[" + index + "]'");
 
-    @Override
-    public Object visitReturnStatement(CSubsetParser.ReturnStatementContext ctx) {
-        Object returnValue = null;
-        if (ctx.expression() != null) {
-            returnValue = visit(ctx.expression());
-        }
-        throw new ReturnException(returnValue);
-    }
-
-    // --- GESTÃO DE ESCOPO E BLOCOS (Sem mudanças) ---
-
-    @Override
-    public Object visitBlock(CSubsetParser.BlockContext ctx) {
-        symbolTable.enterScope();
-        Object result = super.visitChildren(ctx);
-        symbolTable.exitScope();
-        return result;
-    }
-
-    @Override
-    public Object visitForStatement(CSubsetParser.ForStatementContext ctx) {
-        symbolTable.enterScope();
-        if (ctx.init != null) {
-            visit(ctx.init);
-        }
-        boolean isTrue = true;
-        if (ctx.cond != null) {
-            Object conditionResult = visit(ctx.cond);
-            isTrue = forceBoolean(conditionResult);
-        }
-        while (isTrue) {
-            visit(ctx.block());
-            if (ctx.inc != null) {
-                visit(ctx.inc);
+            // Retorna o valor do índice
+            Object value = array[index];
+            if (value == null) {
+                throw new RuntimeException("Erro: Lendo índice de array não inicializado.");
             }
-            if (ctx.cond != null) {
-                Object conditionResult = visit(ctx.cond);
-                isTrue = forceBoolean(conditionResult);
-            }
-        }
-        symbolTable.exitScope();
-        return null;
-    }
+            return value;
 
-    // --- LÓGICA DE EXPRESSÕES (Sem mudanças) ---
+        } catch (RuntimeException e) {
+            System.err.println(e.getMessage());
+            return null; // Retorna null em caso de erro
+        }
+    }
 
     @Override
     public Object visitPrimaryExpr(CSubsetParser.PrimaryExprContext ctx) {
@@ -187,7 +156,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             String text = ctx.CHAR_LITERAL().getText();
             return text.charAt(1);
         }
-        if (ctx.ID() != null) {
+        if (ctx.ID() != null) { // É uma variável escalar
             try {
                 return symbolTable.resolve(ctx.ID().getText());
             } catch (RuntimeException e) {
@@ -195,8 +164,11 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 return null;
             }
         }
-        if (ctx.functionCall() != null) {
+        if (ctx.functionCall() != null) { // É uma chamada de função
             return visit(ctx.functionCall());
+        }
+        if (ctx.arrayAccess() != null) { // É uma leitura de array
+            return visit(ctx.arrayAccess());
         }
         if (ctx.expression() != null) {
             return visit(ctx.expression());
@@ -204,47 +176,16 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         return null;
     }
 
-    @Override
-    public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
-        String varType = ctx.type().getText();
-        String varName = ctx.ID().getText();
-        System.out.println("SEMÂNTICA: Declarando variável '" + varName + "' do tipo '" + varType + "'");
-        try {
-            symbolTable.add(varName, varType);
-            if (ctx.expression() != null) {
-                Object value = visit(ctx.expression());
-                System.out.println("INTERPRETADOR: Inicializando '" + varName + "' com " + value);
-                symbolTable.assign(varName, value);
-            }
-        } catch (RuntimeException e) {
-            System.err.println(e.getMessage());
-        }
-        return null;
-    }
-
-    @Override
-    public Object visitSimpleAssignment(CSubsetParser.SimpleAssignmentContext ctx) {
-        String varName = ctx.ID().getText();
-        Object value = visit(ctx.expression());
-        System.out.println("INTERPRETADOR: Atribuindo " + value + " para '" + varName + "'");
-        try {
-            symbolTable.assign(varName, value);
-        } catch (RuntimeException e) {
-            System.err.println(e.getMessage());
-        }
-        return null;
-    }
+    // --- MÉTODOS RESTANTES (Sem o visitUnaryExpr) ---
 
     @Override
     public Object visitDeclaration(CSubsetParser.DeclarationContext ctx) {
         return visit(ctx.simpleDeclaration());
     }
-
     @Override
     public Object visitAssignment(CSubsetParser.AssignmentContext ctx) {
         return visit(ctx.simpleAssignment());
     }
-
     @Override
     public Object visitLogicalOrExpr(CSubsetParser.LogicalOrExprContext ctx) {
         if (ctx.logicalAndExpr().size() < 2) {
@@ -264,7 +205,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         }
         return false;
     }
-
     @Override
     public Object visitLogicalAndExpr(CSubsetParser.LogicalAndExprContext ctx) {
         if (ctx.relExpr().size() < 2) {
@@ -284,6 +224,8 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         }
         return true;
     }
+
+    // O MÉTODO visitUnaryExpr FOI REMOVIDO DESTA VERSÃO
 
     @Override
     public Object visitRelExpr(CSubsetParser.RelExprContext ctx) {
@@ -323,7 +265,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             throw new RuntimeException("Erro de tipo: não é possível comparar " + left.getClass().getName() + " com " + right.getClass().getName());
         }
     }
-
     @Override
     public Object visitAddExpr(CSubsetParser.AddExprContext ctx) {
         Object left = visit(ctx.multExpr(0));
@@ -350,7 +291,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         }
         return left;
     }
-
     @Override
     public Object visitMultExpr(CSubsetParser.MultExprContext ctx) {
         Object left = visit(ctx.primaryExpr(0));
@@ -383,9 +323,110 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         }
         return left;
     }
-
-    // --- RESTANTES MÉTODOS DE CONTROLO (Sem mudanças) ---
-
+    @Override
+    public Object visitProgram(CSubsetParser.ProgramContext ctx) {
+        for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
+            visit(funcCtx);
+        }
+        FunctionSymbol mainFunction = symbolTable.resolveFunction("main");
+        if (mainFunction == null) {
+            throw new RuntimeException("Erro: Função 'main' não encontrada.");
+        }
+        try {
+            executeFunction(mainFunction, new ArrayList<>());
+        } catch (ReturnException re) {
+            // Ignorar valor de retorno do main
+        }
+        return null;
+    }
+    @Override
+    public Object visitFunctionDeclaration(CSubsetParser.FunctionDeclarationContext ctx) {
+        String funcType = ctx.type().getText();
+        String funcName = ctx.ID().getText();
+        List<Map.Entry<String, String>> params = new ArrayList<>();
+        if (ctx.paramList() != null) {
+            for (CSubsetParser.ParamContext paramCtx : ctx.paramList().param()) {
+                String paramType = paramCtx.type().getText();
+                String paramName = paramCtx.ID().getText();
+                params.add(Map.entry(paramType, paramName));
+            }
+        }
+        FunctionSymbol func = new FunctionSymbol(funcType, params, ctx.block());
+        symbolTable.addFunction(funcName, func);
+        System.out.println("SEMÂNTICA: Registando função '" + funcName + "'");
+        return null;
+    }
+    @Override
+    public Object visitFunctionCall(CSubsetParser.FunctionCallContext ctx) {
+        String funcName = ctx.ID().getText();
+        List<Object> args = new ArrayList<>();
+        if (ctx.argList() != null) {
+            for (CSubsetParser.ExpressionContext exprCtx : ctx.argList().expression()) {
+                args.add(visit(exprCtx));
+            }
+        }
+        FunctionSymbol function = symbolTable.resolveFunction(funcName);
+        try {
+            return executeFunction(function, args);
+        } catch (ReturnException re) {
+            return re.getValue();
+        }
+    }
+    private Object executeFunction(FunctionSymbol function, List<Object> args) {
+        if (function.getParameters().size() != args.size()) {
+            throw new RuntimeException("Erro: Número incorreto de argumentos para a função.");
+        }
+        symbolTable.enterScope();
+        for (int i = 0; i < args.size(); i++) {
+            String paramType = function.getParameters().get(i).getKey();
+            String paramName = function.getParameters().get(i).getValue();
+            Object paramValue = args.get(i);
+            symbolTable.add(paramName, paramType);
+            symbolTable.assign(paramName, paramValue);
+        }
+        visit(function.getBody());
+        symbolTable.exitScope();
+        return null;
+    }
+    @Override
+    public Object visitReturnStatement(CSubsetParser.ReturnStatementContext ctx) {
+        Object returnValue = null;
+        if (ctx.expression() != null) {
+            returnValue = visit(ctx.expression());
+        }
+        throw new ReturnException(returnValue);
+    }
+    @Override
+    public Object visitBlock(CSubsetParser.BlockContext ctx) {
+        symbolTable.enterScope();
+        Object result = super.visitChildren(ctx);
+        symbolTable.exitScope();
+        return result;
+    }
+    @Override
+    public Object visitForStatement(CSubsetParser.ForStatementContext ctx) {
+        symbolTable.enterScope();
+        if (ctx.init != null) {
+            visit(ctx.init);
+        }
+        boolean isTrue = true;
+        if (ctx.cond != null) {
+            Object conditionResult = visit(ctx.cond);
+            isTrue = forceBoolean(conditionResult);
+        }
+        while (isTrue) {
+            visit(ctx.block());
+            if (ctx.inc != null) {
+                visit(ctx.inc);
+            }
+            if (ctx.cond != null) {
+                Object conditionResult = visit(ctx.cond);
+                isTrue = forceBoolean(conditionResult);
+            }
+        }
+        symbolTable.exitScope();
+        return null;
+    }
     @Override
     public Object visitSwitchStatement(CSubsetParser.SwitchStatementContext ctx) {
         Object switchValue = visit(ctx.expression());
@@ -425,6 +466,33 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             visit(ctx.block());
             conditionResult = visit(ctx.expression());
             isTrue = forceBoolean(conditionResult);
+        }
+        return null;
+    }
+    @Override
+    public Object visitScanfStatement(CSubsetParser.ScanfStatementContext ctx) {
+        String formatString = ctx.STRING_LITERAL().getText();
+        String varName = ctx.ID().getText();
+        formatString = formatString.substring(1, formatString.length() - 1);
+        try {
+            String varType = symbolTable.getType(varName);
+            if (formatString.equals("%d") && varType.equals("int")) {
+                System.out.println("INTERPRETADOR: Aguardando entrada (int)...");
+                int value = inputScanner.nextInt();
+                symbolTable.assign(varName, value);
+            } else if (formatString.equals("%f") && varType.equals("float")) {
+                System.out.println("INTERPRETADOR: Aguardando entrada (float)...");
+                double value = inputScanner.nextDouble();
+                symbolTable.assign(varName, value);
+            } else if (formatString.equals("%c") && varType.equals("char")) {
+                System.out.println("INTERPRETADOR: Aguardando entrada (char)...");
+                char value = inputScanner.next().charAt(0);
+                symbolTable.assign(varName, value);
+            } else {
+                throw new RuntimeException("Erro de tipo no scanf ou formato não suportado: " + formatString);
+            }
+        } catch (RuntimeException e) {
+            System.err.println(e.getMessage());
         }
         return null;
     }

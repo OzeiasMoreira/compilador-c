@@ -1,20 +1,11 @@
-// Ficheiro teste.c para recursão
-
-// Função recursiva para calcular fatorial
-int fatorial(int n) {
-    if (n < 2) {
-        return 1; // Caso base: fatorial(0) ou fatorial(1) é 1
-    }
-
-    // Chamada recursiva: n * fatorial(n-1)
-    return n * fatorial(n - 1);
-}
-
+// Em teste.c
 int main() {
-    int num = 5;
-    int resultado;
+    int meuArray[5];
 
-    resultado = fatorial(num);
+    meuArray[0] = 100;
+    meuArray[1] = 200;
 
-    printf("O fatorial de %d eh: %d\n", num, resultado); // Deve ser 120
+    int valor = meuArray[1];
+
+    printf("Valor lido do array: %d\n", valor); // Deve ser 200
 }
