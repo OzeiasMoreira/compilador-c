@@ -1,122 +1,110 @@
-#include <stdio.h> // Teste de include (deve ser ignorado)
-#define MAX 100    // Teste de define
-#define PI 3.1415
+#include <stdio.h>
+#define MAX_ALUNOS 3
+#define NOTA_CORTE 70
 
-// 1. Definição de Struct
-struct Ponto {
-    int x;
-    int y;
+struct Aluno {
+    int id;
+    int nota;
+    int aprovado;
 };
 
-// 2. Definição de Union
-union Conversor {
-    int i;
-    float f;
+union Dados {
+    int inteiro;
+    float decimal;
 };
 
-// 3. Função Recursiva
-int fatorial(int n) {
+int fibonacci(int n) {
+    // CORRIGIDO: Adicionadas chaves {}
     if (n <= 1) {
-        return 1;
+        return n;
     }
-    return n * fatorial(n - 1);
+    return fibonacci(n - 1) + fibonacci(n - 2);
 }
 
-// 4. Função Void
-void linha() {
-    puts("--------------------------------------------------");
+int verificarAprovacao(int nota) {
+    // CORRIGIDO: Adicionadas chaves {}
+    if (nota >= NOTA_CORTE) {
+        return 1;
+    }
+    return 0;
+}
+
+void imprimirCabecalho() {
+    puts("========================================");
+    puts("   SISTEMA DE GESTAO ACADEMICA V1.0");
+    puts("========================================");
 }
 
 int main() {
-    // --- TESTE DE I/O e STRINGS ---
-    char nome[50];
-    int idade;
+    imprimirCabecalho();
 
-    linha();
-    puts("       TESTE FINAL DO COMPILADOR - OZI       ");
-    linha();
+    char usuario[50];
+    printf("Login do Administrador: ");
+    gets(usuario);
+    printf("Bem-vindo, admin %s!\n", usuario);
 
-    printf("Digite seu nome: ");
-    gets(nome); // Teste de gets
+    struct Aluno banco[3];
 
-    printf("Digite sua idade: ");
-    scanf("%d", &idade); // Teste de scanf com ponteiro (&)
+    struct Aluno a1;
+    a1.id = 101;
+    a1.nota = 85;
+    a1.aprovado = verificarAprovacao(a1.nota);
+    banco[0] = a1;
 
-    printf("\nBem-vindo, %s! Voce tem %d anos.\n", nome, idade);
+    struct Aluno a2;
+    a2.id = 102;
+    a2.nota = 45;
+    a2.aprovado = verificarAprovacao(a2.nota);
+    banco[1] = a2;
 
-    // --- TESTE DE OPERADORES LÓGICOS ---
-    if (idade >= 18 && idade < 100) {
-        puts("Status: Maior de idade (Validado com && e >=)");
-    } else {
-        if (!0) { // Teste do NOT (!)
-            puts("Status: Menor de idade ou Centenario (Validado com !)");
+    struct Aluno a3;
+    a3.id = 103;
+    a3.nota = fibonacci(11);
+    a3.aprovado = verificarAprovacao(a3.nota);
+    banco[2] = a3;
+
+    puts("\n[LOG] Dados carregados. Iniciando relatorio...\n");
+
+    int i;
+    struct Aluno temp;
+
+    for (i = 0; i < MAX_ALUNOS; i = i + 1) {
+        temp = banco[i];
+        printf("Aluno ID: %d | Nota: %d | Status: ", temp.id, temp.nota);
+
+        // CORRIGIDO: Adicionadas chaves {}
+        if (temp.aprovado) {
+            puts("APROVADO");
+        } else {
+            puts("REPROVADO");
         }
     }
 
-    // --- TESTE DE LOOPS ---
-    printf("\n[Loop For] Contando ate 3: ");
-    int i;
-    for (i = 1; i <= 3; i = i + 1) {
-        printf("%d ", i);
-    }
-    puts(""); // Nova linha
+    puts("\n[ADMIN] Alteracao manual de nota via ponteiro...");
 
-    printf("[Do-While] Executa pelo menos uma vez: ");
-    int k = 10;
-    do {
-        printf("%d", k);
-    } while (k < 5); // Condição falsa logo no início
-    puts("");
+    int *ptrNota;
+    ptrNota = &a2.nota;
 
-    // --- TESTE DE SWITCH ---
-    printf("\n[Switch] Testando com valor 2: ");
-    int op = 2;
-    switch (op) {
-        case 1: puts("Um"); break;
-        case 2: puts("Dois (Correto)"); break;
-        default: puts("Outro");
+    printf("Nota anterior: %d\n", *ptrNota);
+
+    *ptrNota = 100;
+    printf("Nova nota (alterada via *ptr): %d\n", a2.nota);
+
+    // CORRIGIDO: Adicionadas chaves {}
+    if (a2.nota >= NOTA_CORTE) {
+        a2.aprovado = 1;
     }
 
-    // --- TESTE DE ARRAYS ---
-    printf("\n[Arrays] Preenchendo vetor...\n");
-    int numeros[3];
-    numeros[0] = 10;
-    numeros[1] = 20;
-    numeros[2] = 30;
-    printf("Valor no indice 1: %d\n", numeros[1]);
+    printf("Status atualizado para Aluno %d: %d (1=Sim)\n", a2.id, a2.aprovado);
 
-    // --- TESTE DE PONTEIROS ---
-    printf("\n[Ponteiros] Manipulacao de memoria:\n");
-    int valor = 50;
-    int *ptr;
-    ptr = &valor; // ptr aponta para 'valor'
+    puts("\n[SISTEMA] Convertendo codigo de saida...");
+    union Dados conversor;
+    conversor.inteiro = 0;
+    conversor.decimal = 99.9;
 
-    printf("Valor original: %d\n", valor);
-    *ptr = 999; // Altera 'valor' atraves do ponteiro
-    printf("Novo valor (via *ptr): %d\n", valor);
+    printf("Saida do sistema (float): %f\n", conversor.decimal);
 
-    // --- TESTE DE STRUCT ---
-    printf("\n[Structs] Ponto cartesiano:\n");
-    struct Ponto p;
-    p.x = 10;
-    p.y = 20;
-    printf("Coordenadas: (%d, %d)\n", p.x, p.y);
+    puts("========================================");
 
-    // --- TESTE DE UNION ---
-    printf("\n[Unions] Memoria partilhada:\n");
-    union Conversor u;
-    u.i = 42;
-    printf("Union como int: %d\n", u.i);
-    u.f = 3.14; // Sobrescreve o inteiro!
-    printf("Union como float: %f\n", u.f);
-    // printf("Union int (lixo): %d\n", u.i); // Isto daria erro de tipo no nosso interpretador
-
-    // --- TESTE DE FUNÇÃO RECURSIVA ---
-    printf("\n[Recursao] Calculando fatorial de 5:\n");
-    int fat = fatorial(5);
-    printf("Resultado: %d\n", fat);
-
-    linha();
-    puts("TESTE CONCLUIDO COM SUCESSO!");
     return 0;
 }
