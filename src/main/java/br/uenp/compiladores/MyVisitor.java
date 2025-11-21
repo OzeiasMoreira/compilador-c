@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Interpretador completo para o subconjunto de C.
- * Implementa: Variáveis, Arrays, Structs, Unions, Ponteiros, Funções, I/O e Controlo de Fluxo.
+ * Interpretador para o subconjunto de C.
+ * Versão Final: Sem logs de debug.
  */
 public class MyVisitor extends CSubsetBaseVisitor<Object> {
 
@@ -39,21 +39,11 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     @Override
     public Object visitProgram(CSubsetParser.ProgramContext ctx) {
         // 1. Registar Definições Globais
-        for (CSubsetParser.DefineDirectiveContext defineCtx : ctx.defineDirective()) {
-            visit(defineCtx);
-        }
-        for (CSubsetParser.IncludeDirectiveContext includeCtx : ctx.includeDirective()) {
-            visit(includeCtx);
-        }
-        for (CSubsetParser.StructDefinitionContext structCtx : ctx.structDefinition()) {
-            visit(structCtx);
-        }
-        for (CSubsetParser.UnionDefinitionContext unionCtx : ctx.unionDefinition()) {
-            visit(unionCtx);
-        }
-        for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
-            visit(funcCtx);
-        }
+        for (CSubsetParser.DefineDirectiveContext defineCtx : ctx.defineDirective()) { visit(defineCtx); }
+        for (CSubsetParser.IncludeDirectiveContext includeCtx : ctx.includeDirective()) { visit(includeCtx); }
+        for (CSubsetParser.StructDefinitionContext structCtx : ctx.structDefinition()) { visit(structCtx); }
+        for (CSubsetParser.UnionDefinitionContext unionCtx : ctx.unionDefinition()) { visit(unionCtx); }
+        for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) { visit(funcCtx); }
 
         // 2. Encontrar e Executar a função 'main'
         FunctionSymbol mainFunction = symbolTable.resolveFunction("main");
@@ -88,23 +78,19 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
 
         FunctionSymbol func = new FunctionSymbol(funcName, funcType, params, ctx.block());
         symbolTable.addFunction(funcName, func);
-        System.out.println("SEMÂNTICA: Registando função '" + funcName + "'");
         return null;
     }
 
-    // Método auxiliar para executar qualquer função
     private Object executeFunction(FunctionSymbol function, List<Object> args) {
         if (function.getParameters().size() != args.size()) {
             throw new RuntimeException("Erro: Número incorreto de argumentos para a função '" + function.getName() + "'.");
         }
 
-        // Guarda o contexto anterior (para recursão funcionar)
         FunctionSymbol previousFunction = this.currentFunction;
         this.currentFunction = function;
 
         symbolTable.enterScope();
         try {
-            // Registra os parâmetros no escopo da função
             for (int i = 0; i < args.size(); i++) {
                 String paramType = function.getParameters().get(i).getKey();
                 String paramName = function.getParameters().get(i).getValue();
@@ -113,15 +99,13 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 symbolTable.assign(paramName, paramValue);
             }
 
-            // Executa o corpo da função
             visit(function.getBody());
 
         } finally {
             symbolTable.exitScope();
-            this.currentFunction = previousFunction; // Restaura
+            this.currentFunction = previousFunction;
         }
 
-        // Validação de retorno para funções não-void
         if (!function.getType().equals("void")) {
             throw new RuntimeException("Erro: Função não-void '" + function.getName() + "' chegou ao fim sem 'return'.");
         }
@@ -147,7 +131,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
 
     @Override
     public Object visitFunctionCallStatement(CSubsetParser.FunctionCallStatementContext ctx) {
-        visit(ctx.functionCall()); // Apenas visita e ignora o retorno
+        visit(ctx.functionCall());
         return null;
     }
 
@@ -192,7 +176,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 } else if (formatString.contains("%c") && value instanceof Character) {
                     formatString = formatString.replaceFirst("%c", value.toString());
                 } else if (formatString.contains("%s") && value instanceof Object[]) {
-                    // Tratamento de Strings (char[])
                     Object[] arr = (Object[]) value;
                     StringBuilder sb = new StringBuilder();
                     for (Object o : arr) {
@@ -206,7 +189,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
 
         formatString = formatString.replace("\\n", "\n");
         System.out.print(formatString);
-        System.out.flush(); // Importante!
+        System.out.flush();
         return null;
     }
 
@@ -218,15 +201,12 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         try {
             String varType = symbolTable.getType(varName);
             if (formatString.equals("%d") && varType.equals("int")) {
-                System.out.println("INTERPRETADOR: Aguardando entrada (int)...");
                 int value = inputScanner.nextInt();
                 symbolTable.assign(varName, value);
             } else if (formatString.equals("%f") && varType.equals("float")) {
-                System.out.println("INTERPRETADOR: Aguardando entrada (float)...");
                 double value = inputScanner.nextDouble();
                 symbolTable.assign(varName, value);
             } else if (formatString.equals("%c") && varType.equals("char")) {
-                System.out.println("INTERPRETADOR: Aguardando entrada (char)...");
                 char value = inputScanner.next().charAt(0);
                 symbolTable.assign(varName, value);
             } else {
@@ -248,7 +228,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             }
             Object[] array = (Object[]) obj;
 
-            System.out.println("INTERPRETADOR: Aguardando entrada de texto (gets)...");
             String input = inputScanner.next();
 
             for (int i = 0; i < array.length && i < input.length(); i++) {
@@ -272,30 +251,25 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     }
 
     // ============================================================
-    //               DECLARAÇÕES E ATRIBUIÇÕES (Memória)
+    //               DECLARAÇÕES E ATRIBUIÇÕES
     // ============================================================
 
     @Override
     public Object visitSimpleDeclaration(CSubsetParser.SimpleDeclarationContext ctx) {
         String varType = ctx.type().getText();
         String varName = ctx.ID().getText();
-        System.out.println("SEMÂNTICA: Declarando variável '" + varName + "' do tipo '" + varType + "'");
         try {
             symbolTable.add(varName, varType);
 
-            // Declaração de Array
             if (ctx.LBRACKET() != null) {
                 if (ctx.ASSIGN() != null) {
                     throw new RuntimeException("Erro: Inicialização de array na declaração não é suportada.");
                 }
                 int size = Integer.parseInt(ctx.INT().getText());
-                System.out.println("INTERPRETADOR: Alocando array '" + varName + "' com tamanho " + size);
                 symbolTable.assign(varName, new Object[size]);
             }
-            // Declaração com Inicialização
             else if (ctx.ASSIGN() != null) {
                 Object value = visit(ctx.expression());
-                System.out.println("INTERPRETADOR: Inicializando '" + varName + "' com " + value);
                 symbolTable.assign(varName, value);
             }
         } catch (RuntimeException e) {
@@ -309,23 +283,18 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         Object rhsValue = visit(ctx.expression());
         CSubsetParser.LvalueContext lvalue = ctx.lvalue();
         try {
-            // Atribuição Simples
             if (lvalue.ID() != null) {
                 String varName = lvalue.ID().getText();
-                System.out.println("INTERPRETADOR: Atribuindo " + rhsValue + " para '" + varName + "'");
                 symbolTable.assign(varName, rhsValue);
             }
-            // Atribuição a Array
             else if (lvalue.arrayAccess() != null) {
                 String varName = lvalue.arrayAccess().ID().getText();
                 Object arrayObj = symbolTable.resolve(varName);
                 if (!(arrayObj instanceof Object[])) throw new RuntimeException("Erro: Variável não é um array.");
                 Object[] array = (Object[]) arrayObj;
                 int index = (Integer) visit(lvalue.arrayAccess().expression());
-                System.out.println("INTERPRETADOR: Atribuindo " + rhsValue + " para '" + varName + "[" + index + "]'");
                 array[index] = rhsValue;
             }
-            // Atribuição a Struct/Union
             else if (lvalue.memberAccess() != null) {
                 String instanceName = lvalue.memberAccess().ID(0).getText();
                 String memberName = lvalue.memberAccess().ID(1).getText();
@@ -337,14 +306,11 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 } else {
                     throw new RuntimeException("Erro: Não é struct nem union.");
                 }
-                System.out.println("INTERPRETADOR: Atribuindo " + rhsValue + " para " + instanceName + "." + memberName);
             }
-            // Atribuição a Ponteiro (*ptr = 10)
             else if (lvalue.unaryExpr() != null) {
                 Object resolvedName = visit(lvalue.unaryExpr());
                 if (!(resolvedName instanceof String)) throw new RuntimeException("Erro: Desreferência inválida.");
                 String varName = (String) resolvedName;
-                System.out.println("INTERPRETADOR: Atribuindo (via ponteiro) " + rhsValue + " para '" + varName + "'");
                 symbolTable.assign(varName, rhsValue);
             }
         } catch (RuntimeException e) {
@@ -354,22 +320,20 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     }
 
     // ============================================================
-    //               EXPRESSÕES (Aritmética, Lógica, Ponteiros)
+    //               EXPRESSÕES
     // ============================================================
 
     @Override
     public Object visitUnaryExpr(CSubsetParser.UnaryExprContext ctx) {
-        if (ctx.NOT() != null) { // !x
+        if (ctx.NOT() != null) {
             return !forceBoolean(visit(ctx.unaryExpr()));
-        } else if (ctx.AMPERSAND() != null) { // &x
+        } else if (ctx.AMPERSAND() != null) {
             String varName = ctx.unaryExpr().getText();
-            System.out.println("INTERPRETADOR: Obtendo endereço de '" + varName + "'");
             return varName;
-        } else if (ctx.STAR() != null) { // *ptr
+        } else if (ctx.STAR() != null) {
             Object ptrValue = visit(ctx.unaryExpr());
             if (!(ptrValue instanceof String)) throw new RuntimeException("Erro: Tentativa de desreferência em não-ponteiro.");
             String varName = (String) ptrValue;
-            System.out.println("INTERPRETADOR: Lendo (via ponteiro) o valor de '" + varName + "'");
             return symbolTable.resolve(varName);
         } else {
             return visit(ctx.primaryExpr());
@@ -470,9 +434,9 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
 
     @Override
     public Object visitLogicalAndExpr(CSubsetParser.LogicalAndExprContext ctx) {
-        if (ctx.relExpr().size() < 2) return visit(ctx.relExpr(0)); // Correção: Usa relExpr
+        if (ctx.relExpr().size() < 2) return visit(ctx.relExpr(0));
         Object left = visit(ctx.relExpr(0));
-        if (!forceBoolean(left)) return false; // Curto-circuito
+        if (!forceBoolean(left)) return false;
         for (int i = 1; i < ctx.relExpr().size(); i++) {
             if (!forceBoolean(visit(ctx.relExpr(i)))) return false;
         }
@@ -483,7 +447,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     public Object visitLogicalOrExpr(CSubsetParser.LogicalOrExprContext ctx) {
         if (ctx.logicalAndExpr().size() < 2) return visit(ctx.logicalAndExpr(0));
         Object left = visit(ctx.logicalAndExpr(0));
-        if (forceBoolean(left)) return true; // Curto-circuito
+        if (forceBoolean(left)) return true;
         for (int i = 1; i < ctx.logicalAndExpr().size(); i++) {
             if (forceBoolean(visit(ctx.logicalAndExpr(i)))) return true;
         }
@@ -497,7 +461,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     @Override
     public Object visitStructDefinition(CSubsetParser.StructDefinitionContext ctx) {
         String name = ctx.ID().getText();
-        System.out.println("SEMÂNTICA: Registando struct '" + name + "'");
         StructDefinition def = new StructDefinition();
         for (CSubsetParser.StructMemberContext m : ctx.structMember()) {
             def.addMember(m.ID().getText(), m.type().getText());
@@ -509,7 +472,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     @Override
     public Object visitUnionDefinition(CSubsetParser.UnionDefinitionContext ctx) {
         String name = ctx.ID().getText();
-        System.out.println("SEMÂNTICA: Registando union '" + name + "'");
         StructDefinition def = new StructDefinition();
         for (CSubsetParser.StructMemberContext m : ctx.structMember()) {
             def.addMember(m.ID().getText(), m.type().getText());
@@ -522,18 +484,14 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     public Object visitDefineDirective(CSubsetParser.DefineDirectiveContext ctx) {
         String name = ctx.ID().getText();
         Object val = (ctx.INT()!=null) ? Integer.parseInt(ctx.INT().getText()) : Double.parseDouble(ctx.FLOAT().getText());
-        System.out.println("PRÉ-PROCESSADOR: Definindo '" + name + "' como " + val);
         symbolTable.addDefine(name, val);
         return null;
     }
 
     @Override
     public Object visitIncludeDirective(CSubsetParser.IncludeDirectiveContext ctx) {
-        System.out.println("PRÉ-PROCESSADOR: Ignorando '" + ctx.getText() + "'");
         return null;
     }
-
-    // --- ACESSO A MEMBROS E ARRAYS ---
 
     @Override public Object visitArrayAccess(CSubsetParser.ArrayAccessContext ctx) {
         try {
@@ -551,13 +509,8 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         } catch (Exception e) { System.err.println(e.getMessage()); return null; }
     }
 
-    // --- BOILERPLATE (Delegar Declaração e Atribuição) ---
     @Override public Object visitDeclaration(CSubsetParser.DeclarationContext ctx) { return visit(ctx.simpleDeclaration()); }
     @Override public Object visitAssignment(CSubsetParser.AssignmentContext ctx) { return visit(ctx.simpleAssignment()); }
-
-    // ============================================================
-    //               ESTRUTURAS DE CONTROLO
-    // ============================================================
 
     @Override public Object visitBlock(CSubsetParser.BlockContext ctx) {
         symbolTable.enterScope();
@@ -565,6 +518,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         symbolTable.exitScope();
         return res;
     }
+
     @Override public Object visitIfStatement(CSubsetParser.IfStatementContext ctx) {
         if (forceBoolean(visit(ctx.expression()))) visit(ctx.block(0));
         else if (ctx.ELSE() != null) visit(ctx.block(1));
