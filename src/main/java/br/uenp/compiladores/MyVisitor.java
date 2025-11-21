@@ -11,7 +11,7 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     private Scanner inputScanner = new Scanner(System.in);
     private FunctionSymbol currentFunction = null;
 
-    // --- FUNÇÕES AUXILIARES (Sem mudanças) ---
+    // --- FUNÇÕES AUXILIARES ---
     private Number promoteToNumber(Object obj) {
         if (obj instanceof Number) { return (Number) obj; }
         throw new RuntimeException("Erro de tipo: esperado um número, mas recebido " + obj);
@@ -24,11 +24,9 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         throw new RuntimeException("Erro de tipo: não é possível avaliar a expressão como booleana.");
     }
 
-    // --- PONTO DE ENTRADA (Atualizado) ---
-
+    // --- PONTO DE ENTRADA ---
     @Override
     public Object visitProgram(CSubsetParser.ProgramContext ctx) {
-        // 1º Passo: Registar todas as definições globais
         for (CSubsetParser.DefineDirectiveContext defineCtx : ctx.defineDirective()) {
             visit(defineCtx);
         }
@@ -44,8 +42,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         for (CSubsetParser.FunctionDeclarationContext funcCtx : ctx.functionDeclaration()) {
             visit(funcCtx);
         }
-
-        // 2º Passo: Encontrar e executar 'main'
         FunctionSymbol mainFunction = symbolTable.resolveFunction("main");
         if (mainFunction == null) {
             throw new RuntimeException("Erro: Função 'main' não encontrada.");
@@ -53,22 +49,18 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         try {
             executeFunction(mainFunction, new ArrayList<>());
         } catch (ReturnException re) {
-            // Ignorar
+            // Ignorar (se alguém retornar de main)
         }
         return null;
     }
 
-    //
-    // --- NOVO MÉTODO ADICIONADO (Para corrigir o seu erro de 'imprimir(123)') ---
-    //
+    // --- MÉTODOS DE FUNÇÃO (Corrigidos) ---
+
     @Override
     public Object visitFunctionCallStatement(CSubsetParser.FunctionCallStatementContext ctx) {
-        // Simplesmente visita a chamada de função e ignora o seu retorno
         visit(ctx.functionCall());
         return null;
     }
-
-    // --- MÉTODOS DE FUNÇÃO (Atualizados) ---
 
     @Override
     public Object visitIncludeDirective(CSubsetParser.IncludeDirectiveContext ctx) {
@@ -90,12 +82,17 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 symbolTable.add(paramName, paramType);
                 symbolTable.assign(paramName, paramValue);
             }
-            visit(function.getBody());
+            try {
+                // Executa o corpo da função; se houver return, ele lança ReturnException
+                visit(function.getBody());
+            } catch (ReturnException re) {
+                // Captura o valor retornado e devolve como resultado da chamada
+                return re.getValue();
+            }
         } finally {
             symbolTable.exitScope();
             this.currentFunction = null;
         }
-        // CORRIGIDO: Agora usa os métodos 'getName' e 'getType'
         if (!function.getType().equals("void")) {
             throw new RuntimeException("Erro: Função não-void '" + function.getName() + "' chegou ao fim sem 'return'.");
         }
@@ -107,7 +104,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         if (currentFunction == null) {
             throw new RuntimeException("Erro: 'return' encontrado fora de uma função.");
         }
-        // CORRIGIDO: Agora usa o método 'getType'
         String funcType = currentFunction.getType();
 
         if (ctx.expression() == null) {
@@ -137,17 +133,34 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
                 params.add(Map.entry(paramType, paramName));
             }
         }
-
-        // CORRIGIDO: Passa 'funcName' para o novo construtor
         FunctionSymbol func = new FunctionSymbol(funcName, funcType, params, ctx.block());
         symbolTable.addFunction(funcName, func);
-
         System.out.println("SEMÂNTICA: Registando função '" + funcName + "'");
         return null;
     }
 
-    // --- MÉTODOS RESTANTES (Sem mudanças) ---
-    // (Apenas colados para garantir que o ficheiro está completo)
+    // --- NOVO: VISIT FUNCTION CALL ---
+    @Override
+    public Object visitFunctionCall(CSubsetParser.FunctionCallContext ctx) {
+        String funcName = ctx.ID().getText();
+        List<Object> args = new ArrayList<>();
+        if (ctx.argList() != null) {
+            for (CSubsetParser.ExpressionContext ectx : ctx.argList().expression()) {
+                args.add(visit(ectx));
+            }
+        }
+
+        // Se for função do usuário registrada
+        if (symbolTable.isFunction(funcName)) {
+            FunctionSymbol func = symbolTable.resolveFunction(funcName);
+            return executeFunction(func, args);
+        }
+
+        // Se quiser suportar chamadas a funções nativas aqui, adicione o tratamento.
+        throw new RuntimeException("Erro: função '" + funcName + "' não declarada.");
+    }
+
+    // --- I/O (Corrigido) ---
 
     @Override
     public Object visitPrintfStatement(CSubsetParser.PrintfStatementContext ctx) {
@@ -178,6 +191,36 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         System.out.println(str);
         return null;
     }
+    @Override
+    public Object visitScanfStatement(CSubsetParser.ScanfStatementContext ctx) {
+        String formatString = ctx.STRING_LITERAL().getText();
+        String varName = ctx.ID().getText();
+        formatString = formatString.substring(1, formatString.length() - 1);
+        try {
+            String varType = symbolTable.getType(varName);
+            if (formatString.equals("%d") && varType.equals("int")) {
+                System.out.println("INTERPRETADOR: Aguardando entrada (int)...");
+                int value = inputScanner.nextInt();
+                symbolTable.assign(varName, value);
+            } else if (formatString.equals("%f") && varType.equals("float")) {
+                System.out.println("INTERPRETADOR: Aguardando entrada (float)...");
+                double value = inputScanner.nextDouble();
+                symbolTable.assign(varName, value);
+            } else if (formatString.equals("%c") && varType.equals("char")) {
+                System.out.println("INTERPRETADOR: Aguardando entrada (char)...");
+                char value = inputScanner.next().charAt(0);
+                symbolTable.assign(varName, value);
+            } else {
+                throw new RuntimeException("Erro de tipo no scanf ou formato não suportado: " + formatString);
+            }
+        } catch (RuntimeException e) {
+            System.err.println(e.getMessage());
+        }
+        return null;
+    }
+
+    // --- PRÉ-PROCESSADOR E DEFINIÇÕES ---
+
     @Override
     public Object visitDefineDirective(CSubsetParser.DefineDirectiveContext ctx) {
         String name = ctx.ID().getText();
@@ -219,6 +262,9 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         symbolTable.addUnionDefinition(unionName, def);
         return null;
     }
+
+    // --- LÓGICA DE ATRIBUIÇÃO E DECLARAÇÃO ---
+
     @Override
     public Object visitMemberAccess(CSubsetParser.MemberAccessContext ctx) {
         String instanceName = ctx.ID(0).getText();
@@ -389,6 +435,9 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
     public Object visitAssignment(CSubsetParser.AssignmentContext ctx) {
         return visit(ctx.simpleAssignment());
     }
+
+    // --- LÓGICA DE EXPRESSÃO (Corrigida) ---
+
     @Override
     public Object visitLogicalOrExpr(CSubsetParser.LogicalOrExprContext ctx) {
         if (ctx.logicalAndExpr().size() < 2) {
@@ -552,6 +601,9 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
         }
         return left;
     }
+
+    // --- CONTROLO DE FLUXO ---
+
     @Override
     public Object visitBlock(CSubsetParser.BlockContext ctx) {
         symbolTable.enterScope();
@@ -622,33 +674,6 @@ public class MyVisitor extends CSubsetBaseVisitor<Object> {
             visit(ctx.block());
             conditionResult = visit(ctx.expression());
             isTrue = forceBoolean(conditionResult);
-        }
-        return null;
-    }
-    @Override
-    public Object visitScanfStatement(CSubsetParser.ScanfStatementContext ctx) {
-        String formatString = ctx.STRING_LITERAL().getText();
-        String varName = ctx.ID().getText();
-        formatString = formatString.substring(1, formatString.length() - 1);
-        try {
-            String varType = symbolTable.getType(varName);
-            if (formatString.equals("%d") && varType.equals("int")) {
-                System.out.println("INTERPRETADOR: Aguardando entrada (int)...");
-                int value = inputScanner.nextInt();
-                symbolTable.assign(varName, value);
-            } else if (formatString.equals("%f") && varType.equals("float")) {
-                System.out.println("INTERPRETADOR: Aguardando entrada (float)...");
-                double value = inputScanner.nextDouble();
-                symbolTable.assign(varName, value);
-            } else if (formatString.equals("%c") && varType.equals("char")) {
-                System.out.println("INTERPRETADOR: Aguardando entrada (char)...");
-                char value = inputScanner.next().charAt(0);
-                symbolTable.assign(varName, value);
-            } else {
-                throw new RuntimeException("Erro de tipo no scanf ou formato não suportado: " + formatString);
-            }
-        } catch (RuntimeException e) {
-            System.err.println(e.getMessage());
         }
         return null;
     }

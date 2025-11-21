@@ -1,18 +1,12 @@
 // Em teste.c
-int main() {
-    int x = 10;
-    int y = 0;
-    int *ptr; // Declara o ponteiro
+#include <stdio.h> // Deve ser ignorado
 
-    printf("x inicial = %d\n", x); // Deve ser 10
+// Função 'void'
+void imprimir(int valor) {
+    printf("O valor eh: %d\n", valor);
+    return;
+}
 
-    ptr = &x; // Ponteiro agora guarda o "endereço" de x
-
-    *ptr = 20; // Modifica o valor de x ATRAVÉS do ponteiro
-
-    printf("x apos *ptr = 20: %d\n", x); // Deve ser 20
-
-    y = *ptr + 5; // Lê o valor de x (20) e soma 5
-
-    printf("y vale: %d\n", y); // Deve ser 25
+void main() {
+    imprimir(123);
 }

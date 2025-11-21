@@ -48,21 +48,17 @@ statement:
     | doWhileStatement
     | switchStatement
     | returnStatement
-    | functionCallStatement // <-- ADICIONADO
+    | functionCallStatement // <-- Necessário para 'funcao();'
     ;
 
 returnStatement:
     RETURN expression? SEMI
     ;
 
-//
-// --- NOVA REGRA ADICIONADA ---
-//
 // Permite que uma chamada de função seja uma instrução
 functionCallStatement:
     functionCall SEMI
     ;
-// --- FIM DA NOVA REGRA ---
 
 ifStatement:
     IF LPAREN expression RPAREN block (ELSE block)?
@@ -116,27 +112,39 @@ lvalue:
     | memberAccess
     | (STAR unaryExpr)
     ;
+
+//
+// --- CADEIA DE EXPRESSÃO CORRIGIDA ---
+//
 expression: logicalOrExpr;
+
 logicalOrExpr:
     logicalAndExpr (OR logicalAndExpr)*
     ;
+
 logicalAndExpr:
     relExpr (AND relExpr)*
     ;
+
 relExpr:
     addExpr ( (GT | GTE | LT | LTE | EQ | NEQ) addExpr )*
     ;
+
 addExpr:
     multExpr ( (PLUS | MINUS) multExpr )*
     ;
+
 multExpr:
     unaryExpr ( (STAR | DIV) unaryExpr )*
     ;
+
 unaryExpr:
     (NOT | AMPERSAND) unaryExpr
     | STAR unaryExpr
     | primaryExpr
     ;
+// --- FIM DA CORREÇÃO ---
+
 primaryExpr:
       INT
     | FLOAT
