@@ -1,12 +1,16 @@
-// Em teste.c
-#include <stdio.h> // Deve ser ignorado
+int main() {
+    char nome[20]; // Declara um array de caracteres (uma string)
 
-// Função 'void'
-void imprimir(int valor) {
-    printf("O valor eh: %d\n", valor);
-    return;
-}
+    printf("Digite seu primeiro nome: ");
 
-void main() {
-    imprimir(123);
+    // Lê uma palavra do teclado e guarda em 'nome'
+    gets(nome);
+
+    // Imprime a string lida
+    printf("Ola, %s!\n", nome);
+
+    // Teste extra: Aceder a um caractere individual
+    printf("A primeira letra do seu nome eh: %c\n", nome[0]);
+
+    return 0;
 }

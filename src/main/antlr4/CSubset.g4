@@ -42,20 +42,20 @@ statement:
     | ifStatement
     | printfStatement
     | scanfStatement
+    | getsStatement   // <-- ADICIONADO
     | putsStatement
     | whileStatement
     | forStatement
     | doWhileStatement
     | switchStatement
     | returnStatement
-    | functionCallStatement // <-- Necessário para 'funcao();'
+    | functionCallStatement
     ;
 
 returnStatement:
     RETURN expression? SEMI
     ;
 
-// Permite que uma chamada de função seja uma instrução
 functionCallStatement:
     functionCall SEMI
     ;
@@ -69,6 +69,12 @@ printfStatement:
 scanfStatement:
     SCANF LPAREN STRING_LITERAL COMMA AMPERSAND ID RPAREN SEMI
     ;
+
+// Nova regra para 'gets'
+getsStatement:
+    GETS LPAREN ID RPAREN SEMI
+    ;
+
 putsStatement:
     PUTS LPAREN STRING_LITERAL RPAREN SEMI
     ;
@@ -113,9 +119,7 @@ lvalue:
     | (STAR unaryExpr)
     ;
 
-//
-// --- CADEIA DE EXPRESSÃO CORRIGIDA ---
-//
+// --- CADEIA DE EXPRESSÃO CORRETA ---
 expression: logicalOrExpr;
 
 logicalOrExpr:
@@ -123,7 +127,7 @@ logicalOrExpr:
     ;
 
 logicalAndExpr:
-    relExpr (AND relExpr)*
+    relExpr (AND relExpr)* // Usa relExpr
     ;
 
 relExpr:
@@ -143,7 +147,7 @@ unaryExpr:
     | STAR unaryExpr
     | primaryExpr
     ;
-// --- FIM DA CORREÇÃO ---
+// --- FIM ---
 
 primaryExpr:
       INT
@@ -218,6 +222,7 @@ OR: '||';
 NOT: '!';
 PRINTF: 'printf';
 SCANF: 'scanf';
+GETS: 'gets'; // <-- ADICIONADO
 PUTS: 'puts';
 COMMA: ',';
 AMPERSAND: '&';
