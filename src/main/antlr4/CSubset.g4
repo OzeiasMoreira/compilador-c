@@ -7,11 +7,13 @@ package br.uenp.compiladores;
 program: (defineDirective | includeDirective | structDefinition | unionDefinition | functionDeclaration)+;
 
 functionDeclaration:
-    type ID LPAREN paramList? RPAREN block
+    type ID LPAREN (paramList | T_VOID)? RPAREN block
     ;
+
 paramList:
     param (COMMA param)*
     ;
+
 param:
     type ID
     ;
@@ -42,7 +44,7 @@ statement:
     | ifStatement
     | printfStatement
     | scanfStatement
-    | getsStatement   // <-- ADICIONADO
+    | getsStatement
     | putsStatement
     | whileStatement
     | forStatement
@@ -69,12 +71,9 @@ printfStatement:
 scanfStatement:
     SCANF LPAREN STRING_LITERAL COMMA AMPERSAND ID RPAREN SEMI
     ;
-
-// Nova regra para 'gets'
 getsStatement:
     GETS LPAREN ID RPAREN SEMI
     ;
-
 putsStatement:
     PUTS LPAREN STRING_LITERAL RPAREN SEMI
     ;
@@ -118,37 +117,27 @@ lvalue:
     | memberAccess
     | (STAR unaryExpr)
     ;
-
-// --- CADEIA DE EXPRESSÃO CORRETA ---
 expression: logicalOrExpr;
-
 logicalOrExpr:
     logicalAndExpr (OR logicalAndExpr)*
     ;
-
 logicalAndExpr:
-    relExpr (AND relExpr)* // Usa relExpr
+    relExpr (AND relExpr)*
     ;
-
 relExpr:
     addExpr ( (GT | GTE | LT | LTE | EQ | NEQ) addExpr )*
     ;
-
 addExpr:
     multExpr ( (PLUS | MINUS) multExpr )*
     ;
-
 multExpr:
-    unaryExpr ( (STAR | DIV) unaryExpr )*
+    unaryExpr ( (STAR | DIV | MOD) unaryExpr )*
     ;
-
 unaryExpr:
     (NOT | AMPERSAND) unaryExpr
     | STAR unaryExpr
     | primaryExpr
     ;
-// --- FIM ---
-
 primaryExpr:
       INT
     | FLOAT
@@ -181,7 +170,6 @@ unionType:
     UNION ID
     ;
 
-// --- TOKENS ---
 T_INT: 'int';
 T_FLOAT: 'float';
 T_CHAR: 'char';
@@ -200,6 +188,7 @@ DOT: '.';
 PLUS: '+';
 MINUS: '-';
 DIV: '/';
+MOD: '%';
 STAR: '*';
 IF: 'if';
 ELSE: 'else';
@@ -222,7 +211,7 @@ OR: '||';
 NOT: '!';
 PRINTF: 'printf';
 SCANF: 'scanf';
-GETS: 'gets'; // <-- ADICIONADO
+GETS: 'gets';
 PUTS: 'puts';
 COMMA: ',';
 AMPERSAND: '&';
